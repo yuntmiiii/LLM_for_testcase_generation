@@ -4,11 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>基于LLM的测试用例生成工具</title>
-  <!-- 引入 Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- 引入 Font Awesome 图标 -->
   <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
-  <!-- 配置 Tailwind 自定义主题 -->
   <script>
     tailwind.config = {
       theme: {
@@ -29,236 +26,139 @@
       }
     }
   </script>
-  <!-- 自定义工具类 -->
-  <style type="text/tailwindcss">
-    @layer utilities {
-      .content-auto {
-        content-visibility: auto;
-      }
-      .text-shadow {
-        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      }
-      .card-hover {
-        @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-1;
-      }
-      .btn-primary {
-        @apply bg-primary text-white px-4 py-2 rounded-lg font-medium transition-all duration-300 hover:bg-primary/90 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary/50;
-      }
-      .btn-secondary {
-        @apply bg-white text-primary border border-primary px-4 py-2 rounded-lg font-medium transition-all duration-300 hover:bg-primary/5 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary/50;
-      }
-    }
-  </style>
   <style>
-    /* 全局样式 */
-    body {
-      font-family: 'Inter', system-ui, -apple-system, sans-serif;
-      background-color: #F9FAFC;
-    }
-    
-    /* 滚动条美化 */
-    ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
-    }
-    ::-webkit-scrollbar-track {
-      background: #f1f1f1;
-      border-radius: 3px;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: #c1c1c1;
-      border-radius: 3px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: #a1a1a1;
-    }
-    
-    /* 动画效果 */
-    @keyframes fadeIn {
-      from { opacity: 0; }
-      to { opacity: 1; }
-    }
-    .fade-in {
-      animation: fadeIn 0.5s ease-in-out;
-    }
-    
-    @keyframes pulse {
-      0% { transform: scale(1); }
-      50% { transform: scale(1.05); }
-      100% { transform: scale(1); }
-    }
-    .pulse-animation {
-      animation: pulse 1.5s infinite;
-    }
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: #F9FAFC; height: 100vh; overflow: hidden; /* 禁止整个网页滚动 */ }
+
+    /* 自定义滚动条样式 */
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .fade-in { animation: fadeIn 0.5s ease-in-out; }
+    .btn-primary { @apply bg-primary text-white px-4 py-2 rounded-lg font-medium transition-all duration-300 hover:bg-primary/90 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary/50; }
   </style>
 </head>
-<body class="min-h-screen flex flex-col">
-  <!-- 顶部导航栏 -->
-  <header class="bg-white shadow-sm sticky top-0 z-50">
+<body class="flex flex-col h-screen">
+
+  <header class="bg-white shadow-sm flex-none z-50">
     <div class="container mx-auto px-4 py-3 flex justify-between items-center">
       <div class="flex items-center space-x-2">
-        <i class="fa fa-flask text-primary text-2xl"></i>
-        <h1 class="text-xl md:text-2xl font-bold text-dark">PRD 测试用例生成工具</h1>
+        <i class="fa fa-file-code-o text-primary text-2xl"></i>
+        <h1 class="text-xl md:text-2xl font-bold text-dark">基于LLM的测试用例生成工具</h1>
       </div>
       <div class="flex items-center space-x-3">
         <button class="text-gray-600 hover:text-primary transition-colors" title="帮助文档">
           <i class="fa fa-question-circle text-lg"></i>
         </button>
-        <button class="text-gray-600 hover:text-primary transition-colors" title="关于">
-          <i class="fa fa-info-circle text-lg"></i>
-        </button>
       </div>
     </div>
   </header>
 
-  <!-- 主要内容区 -->
-  <main class="flex-grow container mx-auto px-4 py-6 md:py-10">
-    <!-- 介绍卡片 -->
-    <div class="bg-white rounded-xl shadow-sm p-4 md:p-6 mb-8 fade-in">
+  <main class="flex-grow container mx-auto px-4 py-4 md:py-6 flex flex-col h-[calc(100vh-64px)] overflow-hidden">
+
+    <div class="bg-white rounded-xl shadow-sm p-4 mb-4 fade-in border-l-4 border-primary flex-none">
       <div class="flex items-start">
-        <div class="bg-primary/10 p-3 rounded-lg mr-4">
-          <i class="fa fa-lightbulb-o text-primary text-xl"></i>
+        <div class="bg-blue-50 p-3 rounded-lg mr-4">
+          <i class="fa fa-cloud-download text-primary text-xl"></i>
         </div>
         <div>
-          <h2 class="text-lg md:text-xl font-semibold text-dark mb-2">智能测试用例生成</h2>
-          <p class="text-gray-600">输入你的产品需求文档（PRD）内容，系统将自动生成结构化的测试用例，包含模块、标题、前置条件、测试步骤和预期结果。</p>
+          <h2 class="text-lg font-semibold text-dark mb-1">从飞书文档生成用例</h2>
+          <p class="text-gray-600 text-sm">粘贴文档链接，系统将自动解析<span class="font-bold text-primary">文本、UI截图和流程图</span>生成用例。</p>
         </div>
       </div>
     </div>
 
-    <!-- 输入和结果区域 -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-      <!-- PRD 输入区域 -->
-      <div class="bg-white rounded-xl shadow-sm overflow-hidden card-hover">
-        <div class="bg-primary/5 px-4 py-3 border-b border-gray-100 flex items-center">
-          <i class="fa fa-file-text-o text-primary mr-2"></i>
-          <h3 class="font-semibold text-dark">PRD 内容输入</h3>
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-grow overflow-hidden min-h-0 pb-2">
+
+      <div class="lg:col-span-4 bg-white rounded-xl shadow-sm overflow-hidden flex flex-col h-full border border-gray-100">
+        <div class="bg-gray-50 px-4 py-3 border-b border-gray-100 flex items-center flex-none">
+          <i class="fa fa-link text-primary mr-2"></i>
+          <h3 class="font-semibold text-dark">文档配置</h3>
         </div>
-        <div class="p-4">
-          <div class="mb-4">
-            <label for="prd-content" class="block text-sm font-medium text-gray-700 mb-1">请输入 PRD 详细描述</label>
-            <textarea 
-              id="prd-content" 
-              class="w-full h-64 md:h-80 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all resize-none"
-              placeholder="例如：用户可以登录系统，输入用户名和密码，验证通过后跳转到首页。用户名长度为6-20位，密码长度为8-16位，包含字母和数字..."></textarea>
-            <div class="flex justify-between text-xs text-gray-500 mt-1">
-              <span id="char-count">0 字符</span>
-              <span>支持 Markdown 格式</span>
+
+        <div class="p-5 flex-grow overflow-y-auto custom-scrollbar flex flex-col gap-4">
+          <div>
+            <label for="doc-url" class="block text-sm font-bold text-gray-700 mb-2">飞书文档链接 <span class="text-danger">*</span></label>
+            <input type="url" id="doc-url" class="w-full pl-3 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm" placeholder="https://..." value="">
+          </div>
+
+          <div class="bg-blue-50 rounded-lg p-4 border border-blue-100">
+            <h4 class="text-sm font-semibold text-blue-800 mb-3"><i class="fa fa-key mr-2"></i> 开放平台配置</h4>
+            <div class="space-y-3">
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">App ID</label>
+                <input type="text" id="app-id" class="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-white" placeholder="cli_a..." value="">
+              </div>
+              <div>
+                <label class="block text-xs font-medium text-gray-600 mb-1">App Secret</label>
+                <input type="password" id="app-secret" class="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-white" placeholder="Secret" value="">
+              </div>
             </div>
           </div>
-          <div class="flex flex-wrap gap-3">
-            <button id="generate-btn" class="btn-primary flex items-center">
-              <i class="fa fa-magic mr-2"></i> 生成测试用例
+
+          <div class="mt-auto pt-2">
+            <button id="generate-btn" class="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-2.5 rounded-lg shadow transition-all active:scale-[0.98] flex justify-center items-center">
+              <i class="fa fa-magic mr-2"></i> 生成用例
             </button>
-            <button id="clear-btn" class="btn-secondary flex items-center">
-              <i class="fa fa-eraser mr-2"></i> 清空
-            </button>
+            <button id="clear-btn" class="mt-2 w-full text-gray-500 text-xs hover:text-gray-700 py-2">清空配置</button>
           </div>
         </div>
       </div>
 
-      <!-- 结果展示区域 -->
-      <div class="bg-white rounded-xl shadow-sm overflow-hidden card-hover">
-        <div class="bg-primary/5 px-4 py-3 border-b border-gray-100 flex justify-between items-center">
+      <div class="lg:col-span-8 bg-white rounded-xl shadow-sm overflow-hidden flex flex-col h-full border border-gray-100">
+        <div class="bg-gray-50 px-4 py-3 border-b border-gray-100 flex justify-between items-center flex-none">
           <div class="flex items-center">
             <i class="fa fa-list-alt text-primary mr-2"></i>
-            <h3 class="font-semibold text-dark">生成的测试用例</h3>
+            <h3 class="font-semibold text-dark">生成结果 <span id="case-count-badge" class="ml-2 bg-gray-200 text-gray-600 text-xs py-0.5 px-2 rounded-full hidden">0</span></h3>
           </div>
           <div class="flex space-x-2">
-            <button id="copy-btn" class="text-gray-600 hover:text-primary transition-colors px-2 py-1 rounded" title="复制结果">
-              <i class="fa fa-copy"></i>
-            </button>
-            <button id="export-btn" class="text-gray-600 hover:text-primary transition-colors px-2 py-1 rounded" title="导出为JSON">
-              <i class="fa fa-download"></i>
-            </button>
+            <button id="copy-btn" class="text-gray-600 hover:text-primary px-2 py-1 rounded border border-transparent hover:border-gray-200 text-sm"><i class="fa fa-copy mr-1"></i>复制</button>
+            <button id="export-btn" class="text-gray-600 hover:text-primary px-2 py-1 rounded border border-transparent hover:border-gray-200 text-sm"><i class="fa fa-download mr-1"></i>导出</button>
           </div>
         </div>
-        <div class="p-4">
-          <div id="result-empty" class="h-64 md:h-80 flex flex-col items-center justify-center text-gray-400">
-            <i class="fa fa-file-text-o text-4xl mb-3"></i>
-            <p>测试用例将显示在这里</p>
-            <p class="text-xs mt-1">点击"生成测试用例"按钮开始</p>
-          </div>
-          
-          <div id="result-loading" class="h-64 md:h-80 flex flex-col items-center justify-center text-gray-500 hidden">
-            <div class="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin mb-3"></div>
-            <p>正在生成测试用例...</p>
-            <p class="text-xs mt-1">请稍候，这可能需要几分钟</p>
-          </div>
-          
-          <div id="result-error" class="h-64 md:h-80 flex flex-col items-center justify-center text-danger hidden">
-            <i class="fa fa-exclamation-circle text-4xl mb-3"></i>
-            <p id="error-message" class="text-center px-4">生成失败，请重试</p>
-            <button id="retry-btn" class="btn-primary mt-4">
-              <i class="fa fa-refresh mr-2"></i> 重试
-            </button>
-          </div>
-          
-          <div id="result-success" class="h-64 md:h-80 overflow-auto hidden">
-            <div class="space-y-4" id="test-cases-container">
-              <!-- 测试用例将动态插入这里 -->
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
 
-    <!-- 测试用例预览卡片 -->
-    <div class="bg-white rounded-xl shadow-sm p-4 md:p-6 mb-8 fade-in">
-      <h3 class="text-lg font-semibold text-dark mb-4 flex items-center">
-        <i class="fa fa-eye text-primary mr-2"></i> 测试用例格式预览
-      </h3>
-      <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200">
-          <thead>
-            <tr>
-              <th class="px-3 py-2 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider rounded-tl-lg">模块</th>
-              <th class="px-3 py-2 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">测试标题</th>
-              <th class="px-3 py-2 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">前置条件</th>
-              <th class="px-3 py-2 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">测试步骤</th>
-              <th class="px-3 py-2 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider rounded-tr-lg">预期结果</th>
-            </tr>
-          </thead>
-          <tbody class="bg-white divide-y divide-gray-200">
-            <tr>
-              <td class="px-3 py-2 text-sm text-gray-700">用户登录</td>
-              <td class="px-3 py-2 text-sm text-gray-700">正确用户名密码登录</td>
-              <td class="px-3 py-2 text-sm text-gray-700">1. 系统已部署完成<br>2. 存在有效用户账号</td>
-              <td class="px-3 py-2 text-sm text-gray-700">1. 打开登录页面<br>2. 输入正确用户名<br>3. 输入正确密码<br>4. 点击登录按钮</td>
-              <td class="px-3 py-2 text-sm text-gray-700">成功登录系统，跳转到首页</td>
-            </tr>
-          </tbody>
-        </table>
+        <div class="relative flex-grow bg-gray-50/50">
+
+          <div id="result-empty" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
+            <i class="fa fa-file-text-o text-5xl mb-4 text-gray-200"></i>
+            <p>测试用例将显示在这里</p>
+          </div>
+
+          <div id="result-loading" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500 hidden bg-white z-10">
+            <div class="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin mb-4"></div>
+            <p class="font-medium text-dark">AI 正在思考中...</p>
+          </div>
+
+          <div id="result-error" class="absolute inset-0 flex flex-col items-center justify-center text-danger hidden bg-white z-10">
+            <i class="fa fa-exclamation-triangle text-3xl mb-2"></i>
+            <p id="error-message">生成失败</p>
+            <button id="retry-btn" class="mt-4 px-4 py-2 bg-white border rounded text-sm hover:bg-gray-50">重试</button>
+          </div>
+
+          <div id="result-success" class="absolute inset-0 overflow-y-auto custom-scrollbar p-4 hidden">
+            <div class="space-y-4" id="test-cases-container">
+               </div>
+            <div class="h-4"></div>
+          </div>
+        </div>
       </div>
+
     </div>
   </main>
 
-  <!-- 页脚 -->
-  <footer class="bg-dark text-white py-6">
-    <div class="container mx-auto px-4">
-      <div class="flex flex-col md:flex-row justify-between items-center">
-        <div class="mb-4 md:mb-0">
-          <p class="text-gray-400 text-sm">© 2025 PRD 测试用例生成工具. 保留所有权利.</p>
-        </div>
-        <div class="flex space-x-4">
-          <a href="#" class="text-gray-400 hover:text-white transition-colors text-sm">隐私政策</a>
-          <a href="#" class="text-gray-400 hover:text-white transition-colors text-sm">使用条款</a>
-          <a href="#" class="text-gray-400 hover:text-white transition-colors text-sm">联系我们</a>
-        </div>
-      </div>
-    </div>
-  </footer>
-
-  <!-- 提示框组件 -->
-  <div id="toast" class="fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center z-50">
+  <div id="toast" class="fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg opacity-0 pointer-events-none transition-all duration-300 flex items-center z-50 bg-white border">
     <i id="toast-icon" class="mr-2"></i>
-    <span id="toast-message"></span>
+    <span id="toast-message" class="text-sm font-medium"></span>
   </div>
 
   <script>
-    // DOM 元素
-    const prdContentEl = document.getElementById('prd-content');
-    const charCountEl = document.getElementById('char-count');
+    // --- 核心逻辑保持不变，只需微调渲染部分 ---
+
+    const docUrlEl = document.getElementById('doc-url');
+    const appIdEl = document.getElementById('app-id');
+    const appSecretEl = document.getElementById('app-secret');
     const generateBtn = document.getElementById('generate-btn');
     const clearBtn = document.getElementById('clear-btn');
     const copyBtn = document.getElementById('copy-btn');
@@ -270,220 +170,102 @@
     const resultSuccessEl = document.getElementById('result-success');
     const errorMessageEl = document.getElementById('error-message');
     const testCasesContainerEl = document.getElementById('test-cases-container');
+    const caseCountBadge = document.getElementById('case-count-badge');
     const toastEl = document.getElementById('toast');
     const toastIconEl = document.getElementById('toast-icon');
     const toastMessageEl = document.getElementById('toast-message');
 
-    // 后端 API 地址（根据实际部署情况修改）
-    const API_URL = 'http://localhost:8000/generate';
+    // 你的后端 API 地址
+    const API_URL = 'http://localhost:8000/generate_from_feishu';
 
-    // 字符计数
-    prdContentEl.addEventListener('input', () => {
-      const length = prdContentEl.value.length;
-      charCountEl.textContent = `${length} 字符`;
+    document.addEventListener('DOMContentLoaded', () => {
+      if(localStorage.getItem('feishu_app_id')) appIdEl.value = localStorage.getItem('feishu_app_id');
+      if(localStorage.getItem('feishu_app_secret')) appSecretEl.value = localStorage.getItem('feishu_app_secret');
+      switchResultView('empty');
     });
 
-    // 清空输入
-    clearBtn.addEventListener('click', () => {
-      prdContentEl.value = '';
-      charCountEl.textContent = '0 字符';
-      showToast('已清空输入', 'info');
-    });
+    clearBtn.addEventListener('click', () => { docUrlEl.value = ''; showToast('已清空', 'info'); });
 
-    // 生成测试用例
-    // 生成测试用例
     generateBtn.addEventListener('click', async () => {
-      const prdContent = prdContentEl.value.trim();
+      const docUrl = docUrlEl.value.trim();
+      const appId = appIdEl.value.trim();
+      const appSecret = appSecretEl.value.trim();
 
-      // 验证输入
-      if (!prdContent) {
-        showToast('请输入 PRD 内容', 'warning');
-        return;
-      }
+      if (!docUrl) return showToast('请输入飞书文档链接', 'warning');
+      if (!appId || !appSecret) return showToast('请填写 App ID 和 Secret', 'warning');
 
-      // 显示加载状态
+      localStorage.setItem('feishu_app_id', appId);
+      localStorage.setItem('feishu_app_secret', appSecret);
+
       switchResultView('loading');
 
       try {
-        // 调用后端 API
         const response = await fetch(API_URL, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ content: prdContent }),
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ doc_url: docUrl, app_id: appId, app_secret: appSecret }),
         });
-
         const data = await response.json();
 
-        // console.log("后端返回的完整数据:", data); // 建议开启这一行调试，方便在 F12 控制台查看结构
-
         if (data.status === 'success') {
-          // 🟢 【关键修改点】: 这里要取 data.data.cases
           const casesList = data.data.cases || [];
-
-          // 显示成功结果
           renderTestCases(casesList);
           switchResultView('success');
-          showToast(`成功生成 ${casesList.length} 个测试用例`, 'success');
+          showToast(`成功生成 ${casesList.length} 条用例`, 'success');
         } else {
-          // 显示错误信息
-          errorMessageEl.textContent = data.message || '生成测试用例失败，请重试';
+          errorMessageEl.textContent = data.message || '生成失败';
           switchResultView('error');
-          showToast('生成失败：' + (data.message || '未知错误'), 'error');
         }
       } catch (error) {
-        console.error('生成测试用例出错：', error);
-        errorMessageEl.textContent = '网络错误或服务器未响应，请检查连接后重试';
+        console.error(error);
+        errorMessageEl.textContent = '无法连接后端服务';
         switchResultView('error');
-        showToast('网络错误，请检查连接', 'error');
       }
     });
 
-    // 重试生成
-    retryBtn.addEventListener('click', () => {
-      generateBtn.click();
-    });
+    retryBtn.addEventListener('click', () => generateBtn.click());
 
-    // 复制结果
-    copyBtn.addEventListener('click', () => {
-      if (resultSuccessEl.classList.contains('hidden')) {
-        showToast('暂无结果可复制', 'warning');
-        return;
-      }
-      
-      // 获取所有测试用例数据
-      const testCases = Array.from(testCasesContainerEl.children).map(card => {
-        return {
-          module: card.querySelector('[data-field="module"]').textContent.trim(),
-          title: card.querySelector('[data-field="title"]').textContent.trim(),
-          pre_condition: card.querySelector('[data-field="pre_condition"]').textContent.trim(),
-          steps: Array.from(card.querySelectorAll('[data-field="steps"] li'))
-            .map(li => li.textContent.trim()),
-          expected_result: card.querySelector('[data-field="expected_result"]').textContent.trim()
-        };
-      });
-      
-      // 复制到剪贴板
-      navigator.clipboard.writeText(JSON.stringify(testCases, null, 2))
-        .then(() => {
-          showToast('已复制到剪贴板', 'success');
-        })
-        .catch(err => {
-          console.error('复制失败：', err);
-          showToast('复制失败，请手动复制', 'error');
-        });
-    });
-
-    // 导出结果
-    exportBtn.addEventListener('click', () => {
-      if (resultSuccessEl.classList.contains('hidden')) {
-        showToast('暂无结果可导出', 'warning');
-        return;
-      }
-      
-      // 获取所有测试用例数据
-      const testCases = Array.from(testCasesContainerEl.children).map(card => {
-        return {
-          module: card.querySelector('[data-field="module"]').textContent.trim(),
-          title: card.querySelector('[data-field="title"]').textContent.trim(),
-          pre_condition: card.querySelector('[data-field="pre_condition"]').textContent.trim(),
-          steps: Array.from(card.querySelectorAll('[data-field="steps"] li'))
-            .map(li => li.textContent.trim()),
-          expected_result: card.querySelector('[data-field="expected_result"]').textContent.trim()
-        };
-      });
-      
-      // 创建下载链接
-      const blob = new Blob([JSON.stringify(testCases, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `测试用例_${new Date().toLocaleString().replace(/[/:\s]/g, '-')}.json`;
-      document.body.appendChild(a);
-      a.click();
-      
-      // 清理
-      setTimeout(() => {
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-      }, 0);
-      
-      showToast('导出成功', 'success');
-    });
-
-    // 切换结果视图
-    function switchResultView(view) {
-      // 隐藏所有视图
-      resultEmptyEl.classList.add('hidden');
-      resultLoadingEl.classList.add('hidden');
-      resultErrorEl.classList.add('hidden');
-      resultSuccessEl.classList.add('hidden');
-      
-      // 显示指定视图
-      switch(view) {
-        case 'empty':
-          resultEmptyEl.classList.remove('hidden');
-          break;
-        case 'loading':
-          resultLoadingEl.classList.remove('hidden');
-          break;
-        case 'error':
-          resultErrorEl.classList.remove('hidden');
-          break;
-        case 'success':
-          resultSuccessEl.classList.remove('hidden');
-          break;
-      }
-    }
-
-    // 渲染测试用例
     function renderTestCases(testCases) {
-      // 清空容器
       testCasesContainerEl.innerHTML = '';
-      
+      // 更新数量徽标
+      if(testCases.length > 0) {
+        caseCountBadge.textContent = testCases.length;
+        caseCountBadge.classList.remove('hidden');
+      } else {
+        caseCountBadge.classList.add('hidden');
+      }
+
       if (!Array.isArray(testCases) || testCases.length === 0) {
-        testCasesContainerEl.innerHTML = '<div class="text-center text-gray-400 py-8">没有生成测试用例</div>';
+        testCasesContainerEl.innerHTML = '<div class="text-center text-gray-400 py-10">后端未返回数据</div>';
         return;
       }
-      
-      // 渲染每个测试用例
+
       testCases.forEach((testCase, index) => {
         const card = document.createElement('div');
-        card.className = 'border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow';
+        // 卡片样式微调：更紧凑
+        card.className = 'border border-gray-200 rounded-lg p-4 bg-white hover:border-primary/30 hover:shadow-md transition-all';
         card.innerHTML = `
-          <div class="flex items-center justify-between mb-3">
-            <h4 class="font-semibold text-dark flex items-center">
-              <span class="bg-primary/10 text-primary text-xs font-medium px-2 py-1 rounded mr-2">用例 ${index + 1}</span>
-              <span data-field="title">${escapeHtml(testCase.title || '未命名测试用例')}</span>
+          <div class="flex items-start justify-between mb-2">
+            <h4 class="font-semibold text-dark text-sm md:text-base flex-1 mr-2">
+              <span class="inline-block bg-primary/10 text-primary text-xs px-1.5 py-0.5 rounded mr-1">#${index + 1}</span>
+              <span data-field="title">${escapeHtml(testCase.title)}</span>
             </h4>
-            <span class="bg-secondary/10 text-secondary text-xs font-medium px-2 py-1 rounded" data-field="module">${escapeHtml(testCase.module || '未分类')}</span>
+            <span class="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded whitespace-nowrap" data-field="module">${escapeHtml(testCase.module || '通用')}</span>
           </div>
-          
-          <div class="space-y-3 text-sm">
-            <div>
-              <label class="block text-gray-500 mb-1 flex items-center">
-                <i class="fa fa-check-circle text-gray-400 mr-1"></i> 前置条件
-              </label>
-              <div class="pl-6 text-gray-700" data-field="pre_condition">${escapeHtml(testCase.pre_condition || '无')}</div>
+          <div class="space-y-2 text-xs md:text-sm">
+            <div class="flex gap-2">
+              <div class="w-16 flex-none text-gray-400 text-right">前置</div>
+              <div class="text-gray-600 flex-1 break-words" data-field="pre_condition">${escapeHtml(testCase.pre_condition || '无')}</div>
             </div>
-            
-            <div>
-              <label class="block text-gray-500 mb-1 flex items-center">
-                <i class="fa fa-list-ol text-gray-400 mr-1"></i> 测试步骤
-              </label>
-              <ul class="pl-6 text-gray-700 list-decimal space-y-1" data-field="steps">
-                ${Array.isArray(testCase.steps) && testCase.steps.length > 0 
-                  ? testCase.steps.map(step => `<li>${escapeHtml(step)}</li>`).join('') 
-                  : '<li>无</li>'}
+            <div class="flex gap-2">
+              <div class="w-16 flex-none text-gray-400 text-right">步骤</div>
+              <ul class="text-gray-700 list-decimal pl-4 flex-1 space-y-1" data-field="steps">
+                ${(testCase.steps || []).map(s => `<li>${escapeHtml(s)}</li>`).join('')}
               </ul>
             </div>
-            
-            <div>
-              <label class="block text-gray-500 mb-1 flex items-center">
-                <i class="fa fa-check-square-o text-gray-400 mr-1"></i> 预期结果
-              </label>
-              <div class="pl-6 text-gray-700" data-field="expected_result">${escapeHtml(testCase.expected_result || '无')}</div>
+            <div class="flex gap-2">
+              <div class="w-16 flex-none text-gray-400 text-right">预期</div>
+              <div class="text-gray-800 font-medium flex-1 break-words" data-field="expected_result">${escapeHtml(testCase.expected_result)}</div>
             </div>
           </div>
         `;
@@ -491,71 +273,56 @@
       });
     }
 
-    // 显示提示框
-    function showToast(message, type = 'info') {
-      // 设置图标和颜色
-      switch(type) {
-        case 'success':
-          toastIconEl.className = 'fa fa-check-circle text-success';
-          toastEl.className = 'fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg transform translate-y-0 opacity-100 transition-all duration-300 flex items-center z-50 bg-success/10 text-success border border-success/30';
-          break;
-        case 'error':
-          toastIconEl.className = 'fa fa-exclamation-circle text-danger';
-          toastEl.className = 'fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg transform translate-y-0 opacity-100 transition-all duration-300 flex items-center z-50 bg-danger/10 text-danger border border-danger/30';
-          break;
-        case 'warning':
-          toastIconEl.className = 'fa fa-exclamation-triangle text-warning';
-          toastEl.className = 'fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg transform translate-y-0 opacity-100 transition-all duration-300 flex items-center z-50 bg-warning/10 text-warning border border-warning/30';
-          break;
-        case 'info':
-        default:
-          toastIconEl.className = 'fa fa-info-circle text-primary';
-          toastEl.className = 'fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg transform translate-y-0 opacity-100 transition-all duration-300 flex items-center z-50 bg-primary/10 text-primary border border-primary/30';
-          break;
-      }
-      
-      // 设置消息
-      toastMessageEl.textContent = message;
-      
-      // 3秒后隐藏
-      setTimeout(() => {
-        toastEl.className = 'fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 flex items-center z-50';
-      }, 3000);
+    // --- 复制导出逻辑保持不变 ---
+    copyBtn.addEventListener('click', () => {
+       if (resultSuccessEl.classList.contains('hidden')) return;
+       const content = getCasesJson();
+       navigator.clipboard.writeText(JSON.stringify(content, null, 2)).then(() => showToast('已复制 JSON', 'success'));
+    });
+
+    exportBtn.addEventListener('click', () => {
+        if (resultSuccessEl.classList.contains('hidden')) return;
+        const blob = new Blob([JSON.stringify(getCasesJson(), null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `cases_${Date.now()}.json`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    });
+
+    function getCasesJson() {
+        return Array.from(testCasesContainerEl.children).map(card => ({
+            module: card.querySelector('[data-field="module"]')?.textContent,
+            title: card.querySelector('[data-field="title"]')?.textContent,
+            pre_condition: card.querySelector('[data-field="pre_condition"]')?.textContent,
+            steps: Array.from(card.querySelectorAll('[data-field="steps"] li')).map(li => li.textContent),
+            expected_result: card.querySelector('[data-field="expected_result"]')?.textContent
+        }));
     }
 
-    // HTML 转义
+    function switchResultView(view) {
+      resultEmptyEl.classList.add('hidden');
+      resultLoadingEl.classList.add('hidden');
+      resultErrorEl.classList.add('hidden');
+      resultSuccessEl.classList.add('hidden');
+      if(view === 'empty') resultEmptyEl.classList.remove('hidden');
+      if(view === 'loading') resultLoadingEl.classList.remove('hidden');
+      if(view === 'error') resultErrorEl.classList.remove('hidden');
+      if(view === 'success') resultSuccessEl.classList.remove('hidden');
+    }
+
+    function showToast(msg, type='info') {
+      toastEl.classList.remove('opacity-0', 'pointer-events-none');
+      toastMessageEl.textContent = msg;
+      let color = type === 'success' ? 'text-success' : (type === 'warning' ? 'text-warning' : 'text-primary');
+      let icon = type === 'success' ? 'fa-check-circle' : (type === 'warning' ? 'fa-exclamation-triangle' : 'fa-info-circle');
+      toastIconEl.className = `fa ${icon} ${color} text-lg`;
+      setTimeout(() => toastEl.classList.add('opacity-0', 'pointer-events-none'), 3000);
+    }
+
     function escapeHtml(unsafe) {
       if (!unsafe) return '';
-      return unsafe
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;")
-        .replace(/\n/g, "<br>");
+      return String(unsafe).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
     }
-
-    // 初始化
-    document.addEventListener('DOMContentLoaded', () => {
-      switchResultView('empty');
-      // 示例 PRD 内容（可选）
-      prdContentEl.value = `PRD 内容：用户登录功能
-1. 功能描述：用户可以通过用户名和密码登录系统
-2. 输入限制：
-   - 用户名：6-20位字符，支持字母、数字、下划线
-   - 密码：8-16位字符，必须包含字母和数字
-3. 操作流程：
-   - 打开登录页面
-   - 输入用户名和密码
-   - 点击登录按钮
-   - 验证通过后跳转到首页
-4. 错误处理：
-   - 用户名不存在：提示"用户名不存在"
-   - 密码错误：提示"密码错误"
-   - 字段为空：提示"请输入用户名/密码"
-   - 格式不正确：提示对应的格式错误信息`;
-      prdContentEl.dispatchEvent(new Event('input'));
-    });
   </script>
 </body>
 </html>
