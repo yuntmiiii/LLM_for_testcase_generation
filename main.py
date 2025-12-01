@@ -31,10 +31,19 @@ async def generate_from_feishu(req: FeishuRequest):
         if not parsed_data:
             return {"status": "error", "message": "文档解析为空，请检查链接或权限"}
         print(f"解析成功，共 {len(parsed_data)} 个节点，正在发送给 LLM...")
+        image_map = {}
+        img_count = 0
+        for node in parsed_data:
+            if node['type'] == 'image':
+                img_count += 1
+                image_map[str(img_count)] = node['base64']
         result_dict = await generate_test_cases_llm(parsed_data)
         return {
             "status": "success",
-            "data": result_dict
+            "data": {
+                "cases": result_dict["cases"],
+                "images": image_map
+            }
         }
 
     except Exception as e:
