@@ -4,8 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>基于LLM的测试用例生成工具</title>
+
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.15.4"></script>
+  <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.15.4/dist/browser/index.min.js"></script>
+
   <script>
     tailwind.config = {
       theme: {
@@ -28,16 +34,21 @@
   </script>
   <style>
     body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: #F9FAFC; height: 100vh; overflow: hidden; }
-
-    /* 自定义滚动条样式 */
+    /* 滚动条美化 */
     .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
     .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
-
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     .fade-in { animation: fadeIn 0.5s ease-in-out; }
-    .btn-primary { @apply bg-primary text-white px-4 py-2 rounded-lg font-medium transition-all duration-300 hover:bg-primary/90 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary/50; }
+
+    /* Markmap 容器修正：确保在绝对定位下有高度 */
+    svg#markmap {
+        width: 100%;
+        height: 100%;
+        display: block;
+        background: #fff;
+    }
   </style>
 </head>
 <body class="flex flex-col h-screen">
@@ -46,382 +57,377 @@
     <div class="container mx-auto px-4 py-3 flex justify-between items-center">
       <div class="flex items-center space-x-2">
         <i class="fa fa-file-code-o text-primary text-2xl"></i>
-        <h1 class="text-xl md:text-2xl font-bold text-dark">基于LLM的测试用例生成工具</h1>
-      </div>
-      <div class="flex items-center space-x-3">
-        <button class="text-gray-600 hover:text-primary transition-colors" title="帮助文档">
-          <i class="fa fa-question-circle text-lg"></i>
-        </button>
+        <h1 class="text-xl md:text-2xl font-bold text-dark">测试用例生成助手 Pro</h1>
       </div>
     </div>
   </header>
 
   <main class="flex-grow container mx-auto px-4 py-4 md:py-6 flex flex-col h-[calc(100vh-64px)] overflow-hidden">
 
-    <div class="bg-white rounded-xl shadow-sm p-4 mb-4 fade-in border-l-4 border-primary flex-none">
-      <div class="flex items-start">
-        <div class="bg-blue-50 p-3 rounded-lg mr-4">
-          <i class="fa fa-cloud-download text-primary text-xl"></i>
+    <div class="bg-white rounded-xl shadow-sm p-4 mb-4 fade-in border-l-4 border-primary flex-none flex justify-between items-center">
+        <div class="flex items-start">
+            <div class="bg-blue-50 p-3 rounded-lg mr-4">
+              <i class="fa fa-cloud-download text-primary text-xl"></i>
+            </div>
+            <div>
+              <h2 class="text-lg font-semibold text-dark mb-1">从飞书文档生成</h2>
+              <p class="text-gray-600 text-sm">支持自动解析业务流程、UI截图与规则，生成思维导图和详细用例。</p>
+            </div>
         </div>
-        <div>
-          <h2 class="text-lg font-semibold text-dark mb-1">从飞书文档生成用例</h2>
-          <p class="text-gray-600 text-sm">粘贴文档链接，系统将自动解析<span class="font-bold text-primary">文本、UI截图和流程图</span>生成用例。</p>
-        </div>
-      </div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-grow overflow-hidden min-h-0 pb-2">
 
-      <div class="lg:col-span-4 bg-white rounded-xl shadow-sm overflow-hidden flex flex-col h-full border border-gray-100">
+      <div class="lg:col-span-3 bg-white rounded-xl shadow-sm overflow-hidden flex flex-col h-full border border-gray-100">
         <div class="bg-gray-50 px-4 py-3 border-b border-gray-100 flex items-center flex-none">
-          <i class="fa fa-link text-primary mr-2"></i>
-          <h3 class="font-semibold text-dark">文档配置</h3>
+          <i class="fa fa-cogs text-primary mr-2"></i>
+          <h3 class="font-semibold text-dark">参数配置</h3>
         </div>
-
-        <div class="p-5 flex-grow overflow-y-auto custom-scrollbar flex flex-col gap-4">
+        <div class="p-4 flex-grow overflow-y-auto custom-scrollbar flex flex-col gap-4">
           <div>
-            <label for="doc-url" class="block text-sm font-bold text-gray-700 mb-2">飞书文档链接 <span class="text-danger">*</span></label>
-            <input type="url" id="doc-url" class="w-full pl-3 pr-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary/50 text-sm" placeholder="https://..." value="">
+            <label class="block text-sm font-bold text-gray-700 mb-2">飞书文档链接</label>
+            <input type="url" id="doc-url" class="w-full pl-3 pr-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-primary/50 text-xs" placeholder="https://..." value="">
           </div>
+          <div class="bg-blue-50 rounded p-3 border border-blue-100 space-y-2">
+             <label class="block text-xs font-bold text-blue-800">开放平台 Key</label>
+             <input type="text" id="app-id" class="w-full px-2 py-1.5 border border-gray-300 rounded text-xs" placeholder="App ID (cli_...)" value="">
+             <input type="password" id="app-secret" class="w-full px-2 py-1.5 border border-gray-300 rounded text-xs" placeholder="App Secret" value="">
+          </div>
+          <button id="generate-btn" class="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-2 rounded shadow transition-all flex justify-center items-center text-sm active:scale-95">
+            <i class="fa fa-magic mr-2"></i> 开始生成
+          </button>
+        </div>
+      </div>
 
-          <div class="bg-blue-50 rounded-lg p-4 border border-blue-100">
-            <h4 class="text-sm font-semibold text-blue-800 mb-3"><i class="fa fa-key mr-2"></i> 开放平台配置</h4>
-            <div class="space-y-3">
-              <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">App ID</label>
-                <input type="text" id="app-id" class="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-white" placeholder="cli_a..." value="">
-              </div>
-              <div>
-                <label class="block text-xs font-medium text-gray-600 mb-1">App Secret</label>
-                <input type="password" id="app-secret" class="w-full px-3 py-2 border border-gray-300 rounded text-sm bg-white" placeholder="Secret" value="">
-              </div>
+      <div class="lg:col-span-9 bg-white rounded-xl shadow-sm overflow-hidden flex flex-col h-full border border-gray-100">
+
+        <div class="bg-gray-50 px-4 py-2 border-b border-gray-100 flex justify-between items-center flex-none">
+          <div class="flex items-center space-x-3">
+            <h3 class="font-semibold text-dark">生成结果</h3>
+            <div class="flex bg-gray-200 p-0.5 rounded-lg text-xs" id="view-switcher" style="display:none">
+                <button onclick="switchView('list')" id="btn-view-list" class="px-3 py-1 rounded-md bg-white shadow text-primary font-medium transition-all">列表</button>
+                <button onclick="switchView('map')" id="btn-view-map" class="px-3 py-1 rounded-md text-gray-500 hover:text-gray-700 font-medium transition-all">业务逻辑导图</button>
             </div>
           </div>
-
-          <div class="mt-auto pt-2">
-            <button id="generate-btn" class="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-2.5 rounded-lg shadow transition-all active:scale-[0.98] flex justify-center items-center">
-              <i class="fa fa-magic mr-2"></i> 生成用例
-            </button>
-            <button id="clear-btn" class="mt-2 w-full text-gray-500 text-xs hover:text-gray-700 py-2">清空配置</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="lg:col-span-8 bg-white rounded-xl shadow-sm overflow-hidden flex flex-col h-full border border-gray-100">
-        <div class="bg-gray-50 px-4 py-3 border-b border-gray-100 flex justify-between items-center flex-none">
-          <div class="flex items-center">
-            <i class="fa fa-list-alt text-primary mr-2"></i>
-            <h3 class="font-semibold text-dark">生成结果 <span id="case-count-badge" class="ml-2 bg-gray-200 text-gray-600 text-xs py-0.5 px-2 rounded-full hidden">0</span></h3>
-          </div>
           <div class="flex space-x-2">
-            <button id="copy-btn" class="text-gray-600 hover:text-primary px-2 py-1 rounded border border-transparent hover:border-gray-200 text-sm"><i class="fa fa-copy mr-1"></i>复制</button>
-            <button id="export-btn" class="text-gray-600 hover:text-primary px-2 py-1 rounded border border-transparent hover:border-gray-200 text-sm"><i class="fa fa-download mr-1"></i>导出</button>
+            <button id="copy-btn" class="text-gray-600 hover:text-primary px-2 py-1 text-sm border rounded hover:bg-gray-100"><i class="fa fa-copy mr-1"></i>复制 JSON</button>
+            <button id="export-btn" class="text-gray-600 hover:text-primary px-2 py-1 text-sm border rounded hover:bg-gray-100"><i class="fa fa-download mr-1"></i>导出文件</button>
           </div>
         </div>
 
-        <div class="relative flex-grow bg-gray-50/50">
+        <div class="relative flex-grow bg-gray-50/50 flex flex-col overflow-hidden">
 
-          <div id="result-empty" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
-            <i class="fa fa-file-text-o text-5xl mb-4 text-gray-200"></i>
-            <p>测试用例将显示在这里</p>
-          </div>
+          <div id="result-empty" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 z-10"><i class="fa fa-cube text-5xl mb-4 text-gray-200"></i><p>请配置参数并点击生成</p></div>
+          <div id="result-loading" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500 hidden bg-white z-20"><div class="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin mb-4"></div><p class="animate-pulse">AI 正在深度分析业务逻辑...</p></div>
+          <div id="result-error" class="absolute inset-0 flex flex-col items-center justify-center text-danger hidden bg-white z-20 px-10 text-center"><i class="fa fa-exclamation-triangle text-3xl mb-3"></i><p id="error-message">生成失败</p></div>
 
-          <div id="result-loading" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500 hidden bg-white z-10">
-            <div class="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin mb-4"></div>
-            <p class="font-medium text-dark">AI 正在思考中...</p>
-          </div>
+          <div id="content-wrapper" class="flex-grow overflow-y-auto custom-scrollbar p-4 hidden space-y-4 relative">
 
-          <div id="result-error" class="absolute inset-0 flex flex-col items-center justify-center text-danger hidden bg-white z-10">
-            <i class="fa fa-exclamation-triangle text-3xl mb-2"></i>
-            <p id="error-message">生成失败</p>
-            <button id="retry-btn" class="mt-4 px-4 py-2 bg-white border rounded text-sm hover:bg-gray-50">重试</button>
-          </div>
+            <div id="ai-thought-panel" class="bg-indigo-50 border border-indigo-100 rounded-xl overflow-hidden hidden flex-none">
+                <button id="toggle-thought-btn" class="w-full px-4 py-3 flex justify-between items-center bg-indigo-100/50 hover:bg-indigo-100 transition-colors">
+                  <div class="flex items-center text-indigo-700 font-bold text-sm">
+                    <i class="fa fa-brain mr-2"></i> AI 深度分析思维链 (输入域 & 约束)
+                  </div>
+                  <i class="fa fa-chevron-down text-indigo-500 transition-transform" id="thought-arrow"></i>
+                </button>
+                <div id="thought-content" class="hidden px-4 py-4 space-y-4"></div>
+            </div>
 
-          <div id="result-success" class="absolute inset-0 overflow-y-auto custom-scrollbar p-4 hidden">
-            <div class="space-y-4" id="test-cases-container">
-               </div>
-            <div class="h-4"></div>
+            <div id="result-list-view" class="space-y-4 pb-10"></div>
+
+            <div id="result-map-view" class="hidden absolute inset-0 bg-white z-30 flex flex-col">
+                <div class="flex-none p-2 bg-gray-50 border-b text-xs text-gray-500 flex justify-between">
+                    <span>提示：滚轮缩放 / 拖拽移动 / 仅展示业务逻辑</span>
+                    <span class="text-gray-400">Powered by Markmap</span>
+                </div>
+                <div class="flex-grow relative w-full h-full overflow-hidden">
+                    <svg id="markmap" class="w-full h-full"></svg>
+                </div>
+            </div>
+
           </div>
         </div>
       </div>
-
     </div>
   </main>
 
-  <div id="toast" class="fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg opacity-0 pointer-events-none transition-all duration-300 flex items-center z-50 bg-white border">
-    <i id="toast-icon" class="mr-2"></i>
-    <span id="toast-message" class="text-sm font-medium"></span>
+  <div id="toast" class="fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg opacity-0 pointer-events-none transition-all duration-300 bg-white border flex items-center z-50">
+      <span id="toast-message" class="text-sm font-medium"></span>
   </div>
 
-  <div id="image-modal" class="fixed inset-0 z-[60] hidden" aria-labelledby="modal-title" role="dialog" aria-modal="true">
-    <div class="fixed inset-0 bg-gray-900/95 transition-opacity backdrop-blur-sm cursor-pointer" onclick="closeImageModal()"></div>
-
-    <div class="fixed inset-0 z-10 overflow-y-auto pointer-events-none">
-      <div class="flex min-h-full items-center justify-center p-4 text-center">
-
-        <div class="relative transform overflow-hidden rounded-lg bg-white text-left shadow-2xl transition-all sm:my-8 sm:w-full sm:max-w-5xl pointer-events-auto">
-
-           <div class="absolute right-4 top-4 z-20">
-             <button type="button" class="rounded-full bg-white/80 p-2 text-gray-800 hover:bg-white hover:text-red-600 shadow-sm transition-all duration-200 focus:outline-none" onclick="closeImageModal()">
-               <i class="fa fa-times text-2xl"></i>
-             </button>
-           </div>
-
-           <div class="bg-gray-100 flex justify-center items-center min-h-[300px] p-1">
-             <img id="modal-image-el" src="" alt="参考图预览" class="max-h-[85vh] w-auto object-contain shadow-lg rounded">
-           </div>
-
-           <div class="bg-white px-4 py-3 border-t border-gray-100">
-             <p id="modal-caption" class="text-sm font-medium text-gray-600 w-full text-center">参考图预览</p>
-           </div>
-        </div>
-
-      </div>
+  <div id="image-modal" class="fixed inset-0 z-[60] hidden flex items-center justify-center">
+    <div class="absolute inset-0 bg-gray-900/90 backdrop-blur-sm" onclick="closeImageModal()"></div>
+    <div class="relative z-10 bg-white p-2 rounded max-h-[90vh] shadow-2xl max-w-[90vw]">
+        <button class="absolute -top-10 right-0 text-white hover:text-red-400 text-2xl" onclick="closeImageModal()"><i class="fa fa-times"></i></button>
+        <img id="modal-image-el" class="max-h-[80vh] object-contain rounded">
     </div>
   </div>
 
-  <script>
-    // --- DOM 元素 ---
-    const docUrlEl = document.getElementById('doc-url');
-    const appIdEl = document.getElementById('app-id');
-    const appSecretEl = document.getElementById('app-secret');
-    const generateBtn = document.getElementById('generate-btn');
-    const clearBtn = document.getElementById('clear-btn');
-    const copyBtn = document.getElementById('copy-btn');
-    const exportBtn = document.getElementById('export-btn');
-    const retryBtn = document.getElementById('retry-btn');
-    const resultEmptyEl = document.getElementById('result-empty');
-    const resultLoadingEl = document.getElementById('result-loading');
-    const resultErrorEl = document.getElementById('result-error');
-    const resultSuccessEl = document.getElementById('result-success');
-    const errorMessageEl = document.getElementById('error-message');
-    const testCasesContainerEl = document.getElementById('test-cases-container');
-    const caseCountBadge = document.getElementById('case-count-badge');
-    const toastEl = document.getElementById('toast');
-    const toastIconEl = document.getElementById('toast-icon');
-    const toastMessageEl = document.getElementById('toast-message');
-
-    // 后端 API 地址
+<script>
+    // --- 配置区 ---
     const API_URL = 'http://localhost:8000/generate_from_feishu';
 
-    // 全局变量存储图片数据 { "1": "base64...", "2": "..." }
+    // --- 全局变量 ---
     let globalImages = {};
+    let globalCases = [];
+    let globalAnalysis = [];
+    let markmapInstance = null;
+
+    // --- DOM 元素引用 ---
+    const els = {
+        docUrl: document.getElementById('doc-url'),
+        appId: document.getElementById('app-id'),
+        appSecret: document.getElementById('app-secret'),
+        generateBtn: document.getElementById('generate-btn'),
+        copyBtn: document.getElementById('copy-btn'),
+        exportBtn: document.getElementById('export-btn'),
+        views: {
+            empty: document.getElementById('result-empty'),
+            loading: document.getElementById('result-loading'),
+            error: document.getElementById('result-error'),
+            wrapper: document.getElementById('content-wrapper'),
+            listView: document.getElementById('result-list-view'),
+            mapView: document.getElementById('result-map-view'),
+            switcher: document.getElementById('view-switcher'),
+            thoughtPanel: document.getElementById('ai-thought-panel'),
+            thoughtContent: document.getElementById('thought-content')
+        }
+    };
 
     // --- 初始化 ---
     document.addEventListener('DOMContentLoaded', () => {
-      if(localStorage.getItem('feishu_app_id')) appIdEl.value = localStorage.getItem('feishu_app_id');
-      if(localStorage.getItem('feishu_app_secret')) appSecretEl.value = localStorage.getItem('feishu_app_secret');
-      switchResultView('empty');
+        if(localStorage.getItem('feishu_app_id')) els.appId.value = localStorage.getItem('feishu_app_id');
+        if(localStorage.getItem('feishu_app_secret')) els.appSecret.value = localStorage.getItem('feishu_app_secret');
     });
 
-    // --- 事件监听 ---
-    clearBtn.addEventListener('click', () => { docUrlEl.value = ''; showToast('已清空', 'info'); });
+    // --- 核心操作：生成 ---
+    els.generateBtn.addEventListener('click', async () => {
+        const params = {
+            doc_url: els.docUrl.value.trim(),
+            app_id: els.appId.value.trim(),
+            app_secret: els.appSecret.value.trim()
+        };
 
-    generateBtn.addEventListener('click', async () => {
-      const docUrl = docUrlEl.value.trim();
-      const appId = appIdEl.value.trim();
-      const appSecret = appSecretEl.value.trim();
+        if(!params.doc_url) return showToast('请输入飞书文档链接', 'warning');
+        if(!params.app_id || !params.app_secret) return showToast('请完善 API 配置', 'warning');
 
-      if (!docUrl) return showToast('请输入飞书文档链接', 'warning');
-      if (!appId || !appSecret) return showToast('请填写 App ID 和 Secret', 'warning');
+        localStorage.setItem('feishu_app_id', params.app_id);
+        localStorage.setItem('feishu_app_secret', params.app_secret);
 
-      localStorage.setItem('feishu_app_id', appId);
-      localStorage.setItem('feishu_app_secret', appSecret);
+        toggleState('loading');
 
-      switchResultView('loading');
-      globalImages = {}; // 重置图片缓存
+        try {
+            const res = await fetch(API_URL, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(params)
+            });
+            const json = await res.json();
 
-      try {
-        const response = await fetch(API_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ doc_url: docUrl, app_id: appId, app_secret: appSecret }),
-        });
-        const data = await response.json();
+            if(json.status === 'success') {
+                globalCases = json.data.cases || [];
+                // 兼容字段名 analysis_and_plan
+                globalAnalysis = json.data.analysis_and_plan || json.data.analysis || [];
+                globalImages = json.data.images || {};
 
-        if (data.status === 'success') {
-          // 获取用例列表
-          const casesList = data.data.cases || [];
-          // 获取图片数据 (务必确保后端 main.py 返回了这个字段)
-          globalImages = data.data.images || {};
+                renderAnalysis(globalAnalysis);
+                renderList(globalCases);
+                // 渲染导图
+                setTimeout(() => renderMap(globalAnalysis), 100);
 
-          renderTestCases(casesList);
-          switchResultView('success');
-          showToast(`成功生成 ${casesList.length} 条用例`, 'success');
-        } else {
-          errorMessageEl.textContent = data.message || '生成失败';
-          switchResultView('error');
+                toggleState('success');
+                showToast(`生成成功！`, 'success');
+            } else {
+                throw new Error(json.message || '未知错误');
+            }
+        } catch (e) {
+            console.error(e);
+            document.getElementById('error-message').innerText = e.message || '服务连接超时';
+            toggleState('error');
         }
-      } catch (error) {
-        console.error(error);
-        errorMessageEl.textContent = '无法连接后端服务';
-        switchResultView('error');
-      }
     });
 
-    retryBtn.addEventListener('click', () => generateBtn.click());
-
-    // --- 渲染逻辑 ---
-    function renderTestCases(testCases) {
-      testCasesContainerEl.innerHTML = '';
-      if(testCases.length > 0) {
-        caseCountBadge.textContent = testCases.length;
-        caseCountBadge.classList.remove('hidden');
-      } else {
-        caseCountBadge.classList.add('hidden');
-      }
-
-      if (!Array.isArray(testCases) || testCases.length === 0) {
-        testCasesContainerEl.innerHTML = '<div class="text-center text-gray-400 py-10">后端未返回数据</div>';
-        return;
-      }
-
-      testCases.forEach((testCase, index) => {
-        const card = document.createElement('div');
-        card.className = 'border border-gray-200 rounded-lg p-4 bg-white hover:border-primary/30 hover:shadow-md transition-all group';
-
-        // 处理 visual_evidence 的文本，使其可点击
-        const evidenceHtml = processRefLinks(testCase.visual_evidence || '无');
-
-        // 处理步骤中的文本，使其可点击
-        const stepsList = (testCase.steps || []).map(s => `<li>${processRefLinks(escapeHtml(s))}</li>`).join('');
-
-        card.innerHTML = `
-          <div class="flex items-start justify-between mb-3">
-            <h4 class="font-semibold text-dark text-sm md:text-base flex-1 mr-2 leading-relaxed">
-              <span class="inline-block bg-primary/10 text-primary text-xs px-2 py-0.5 rounded mr-1">#${index + 1}</span>
-              <span data-field="title">${escapeHtml(testCase.title)}</span>
-            </h4>
-            <span class="bg-gray-100 text-gray-600 text-xs px-2 py-1 rounded whitespace-nowrap font-medium" data-field="module">${escapeHtml(testCase.module || '通用')}</span>
-          </div>
-
-          <div class="space-y-3 text-xs md:text-sm">
-
-            ${testCase.visual_evidence && testCase.visual_evidence !== '无' ? `
-            <div class="flex gap-2 bg-indigo-50/60 p-2.5 rounded border border-indigo-100/50">
-              <div class="w-16 flex-none text-indigo-500 text-right font-bold"><i class="fa fa-eye mr-1"></i>溯源</div>
-              <div class="text-indigo-800 flex-1 break-words leading-relaxed" data-field="visual_evidence">
-                ${evidenceHtml}
-              </div>
-            </div>` : ''}
-
-            <div class="flex gap-2 px-1">
-              <div class="w-16 flex-none text-gray-400 text-right font-medium">前置</div>
-              <div class="text-gray-600 flex-1 break-words" data-field="pre_condition">${escapeHtml(testCase.pre_condition || '无')}</div>
-            </div>
-            <div class="flex gap-2 px-1">
-              <div class="w-16 flex-none text-gray-400 text-right font-medium">步骤</div>
-              <ul class="text-gray-700 list-decimal pl-4 flex-1 space-y-1.5 leading-relaxed" data-field="steps">
-                ${stepsList}
-              </ul>
-            </div>
-            <div class="flex gap-2 px-1">
-              <div class="w-16 flex-none text-gray-400 text-right font-medium">预期</div>
-              <div class="text-gray-800 font-medium flex-1 break-words" data-field="expected_result">${escapeHtml(testCase.expected_result)}</div>
-            </div>
-          </div>
-        `;
-        testCasesContainerEl.appendChild(card);
-      });
-    }
-
-    // 正则匹配 [参考图 X] 并转化为 span 链接
-    function processRefLinks(text) {
-      if (!text) return '';
-      // 匹配：[参考图 1] 或 [参考图1-UI] 等变体
-      return String(text).replace(/\[参考图\s*(\d+)(?:-[^\]]+)?\]/g, (match, id) => {
-        return `<span onclick="previewImage('${id}', '${match}')" class="cursor-pointer text-primary font-semibold hover:underline hover:text-blue-700 transition-colors inline-flex items-center gap-0.5 select-none" title="点击查看原图"><i class="fa fa-image text-[10px]"></i>${match}</span>`;
-      });
-    }
-
-    // --- 图片预览逻辑 ---
-    window.previewImage = function(imgId, caption) {
-      const imgData = globalImages[imgId];
-      if (!imgData) {
-        showToast('未找到该图片的原始数据，可能已被清理', 'warning');
-        return;
-      }
-
-      const modal = document.getElementById('image-modal');
-      const modalImg = document.getElementById('modal-image-el');
-      const modalCaption = document.getElementById('modal-caption');
-
-      modalImg.src = imgData.startsWith('data:') ? imgData : `data:image/jpeg;base64,${imgData}`;
-      modalCaption.textContent = caption || '图片预览';
-
-      modal.classList.remove('hidden');
-      document.body.style.overflow = 'hidden'; // 禁止背景滚动
-      document.addEventListener('keydown', handleEscClose); // 绑定ESC
-    };
-
-    window.closeImageModal = function() {
-      const modal = document.getElementById('image-modal');
-      if (modal.classList.contains('hidden')) return;
-
-      modal.classList.add('hidden');
-      document.getElementById('modal-image-el').src = '';
-
-      document.body.style.overflow = ''; // 恢复背景滚动
-      document.removeEventListener('keydown', handleEscClose); // 解绑ESC
-    };
-
-    function handleEscClose(e) {
-      if (e.key === 'Escape') {
-        window.closeImageModal();
-      }
-    }
-
-    // --- 工具函数 ---
-    copyBtn.addEventListener('click', () => {
-       if (resultSuccessEl.classList.contains('hidden')) return;
-       const content = getCasesJson();
-       navigator.clipboard.writeText(JSON.stringify(content, null, 2)).then(() => showToast('已复制 JSON', 'success'));
+    els.copyBtn.addEventListener('click', () => {
+        if(!globalCases.length) return showToast('无数据');
+        navigator.clipboard.writeText(JSON.stringify(globalCases, null, 2))
+            .then(()=>showToast('JSON 已复制', 'success'));
     });
 
-    exportBtn.addEventListener('click', () => {
-        if (resultSuccessEl.classList.contains('hidden')) return;
-        const blob = new Blob([JSON.stringify(getCasesJson(), null, 2)], { type: 'application/json' });
+    els.exportBtn.addEventListener('click', () => {
+        if(!globalCases.length) return showToast('无数据');
+        const blob = new Blob([JSON.stringify(globalCases, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url; a.download = `cases_${Date.now()}.json`;
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
     });
 
-    function getCasesJson() {
-        return Array.from(testCasesContainerEl.children).map(card => ({
-            module: card.querySelector('[data-field="module"]')?.textContent,
-            visual_evidence: card.querySelector('[data-field="visual_evidence"]')?.textContent.trim() || '无',
-            title: card.querySelector('[data-field="title"]')?.textContent,
-            pre_condition: card.querySelector('[data-field="pre_condition"]')?.textContent,
-            steps: Array.from(card.querySelectorAll('[data-field="steps"] li')).map(li => li.textContent),
-            expected_result: card.querySelector('[data-field="expected_result"]')?.textContent
-        }));
+    // --- 渲染逻辑 ---
+
+    function renderAnalysis(analysisList) {
+        if (!analysisList || analysisList.length === 0) {
+            els.views.thoughtPanel.classList.add('hidden');
+            return;
+        }
+        els.views.thoughtPanel.classList.remove('hidden');
+        els.views.thoughtContent.innerHTML = analysisList.map(plan => `
+            <div class="bg-white p-4 rounded-lg border border-indigo-100 shadow-sm text-sm mb-3">
+                <div class="font-bold text-indigo-700 mb-3 flex items-center border-b border-gray-100 pb-2">
+                    <i class="fa fa-cube mr-2"></i>${escapeHtml(plan.module_name)}
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-2">Identified Inputs</span>
+                        <div class="flex flex-wrap gap-2">
+                            ${(plan.identified_inputs || []).map(i => `<span class="px-2 py-1 bg-gray-100 border border-gray-200 rounded text-xs text-gray-700">${escapeHtml(i)}</span>`).join('')}
+                        </div>
+                    </div>
+                    <div>
+                        <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-2">Business Constraints</span>
+                        <ul class="list-disc pl-4 space-y-1 text-xs text-gray-600 bg-gray-50/50 p-2 rounded max-h-40 overflow-y-auto custom-scrollbar">
+                            ${(plan.business_constraints || []).map(c => `<li class="leading-relaxed">${escapeHtml(c)}</li>`).join('')}
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+
+        const btn = document.getElementById('toggle-thought-btn');
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+        newBtn.addEventListener('click', () => {
+            els.views.thoughtContent.classList.toggle('hidden');
+            document.getElementById('thought-arrow').style.transform = els.views.thoughtContent.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
+        });
     }
 
-    function switchResultView(view) {
-      resultEmptyEl.classList.add('hidden');
-      resultLoadingEl.classList.add('hidden');
-      resultErrorEl.classList.add('hidden');
-      resultSuccessEl.classList.add('hidden');
-      if(view === 'empty') resultEmptyEl.classList.remove('hidden');
-      if(view === 'loading') resultLoadingEl.classList.remove('hidden');
-      if(view === 'error') resultErrorEl.classList.remove('hidden');
-      if(view === 'success') resultSuccessEl.classList.remove('hidden');
+    function renderList(cases) {
+        if(!cases.length) {
+            els.views.listView.innerHTML = '<div class="text-center text-gray-400 py-10">未生成任何用例</div>';
+            return;
+        }
+        els.views.listView.innerHTML = cases.map((c, i) => `
+            <div class="bg-white p-4 rounded-lg border border-gray-200 hover:border-primary/50 transition-all shadow-sm group">
+                <div class="flex justify-between items-start mb-2">
+                    <h5 class="font-bold text-gray-800 text-sm flex-1"><span class="text-primary mr-2">#${i+1}</span>${escapeHtml(c.title)}</h5>
+                    <span class="text-xs px-2 py-0.5 bg-blue-50 text-blue-600 rounded ml-2 whitespace-nowrap">${escapeHtml(c.module_name || c.module ||'通用')}</span>
+                </div>
+                <div class="text-xs text-gray-600 space-y-2 pl-4 border-l-2 border-gray-100 group-hover:border-primary/20">
+                     ${c.visual_evidence && c.visual_evidence!=='无' ? `<div class="text-indigo-600 font-medium cursor-pointer" onclick="previewRef('${escapeHtml(c.visual_evidence)}')"><i class="fa fa-eye mr-1"></i>${processRefLinks(c.visual_evidence)}</div>` : ''}
+                    <div><span class="text-gray-400 mr-2">前置:</span>${escapeHtml(c.pre_condition||'-')}</div>
+                    <div><span class="text-gray-400 mr-2">步骤:</span><ol class="list-decimal pl-4 mt-1 space-y-0.5 text-gray-700">${(c.steps||[]).map(s=>`<li>${escapeHtml(s)}</li>`).join('')}</ol></div>
+                    <div><span class="text-gray-400 mr-2">预期:</span><span class="text-gray-800 font-medium">${escapeHtml(c.expected_result)}</span></div>
+                </div>
+            </div>
+        `).join('');
     }
 
+    // --- 3. 渲染思维导图 (修正版：默认展开全部) ---
+    function renderMap(analysis) {
+        console.log("🔍 [Debug] 开始渲染业务逻辑导图");
+        if (!window.markmap) return showToast("Markmap 组件未加载", "warning");
+        const svgEl = document.getElementById('markmap');
+        svgEl.innerHTML = '';
+
+        let md = '# 业务逻辑全景图\n';
+        const safeAnalysis = Array.isArray(analysis) ? analysis : [];
+
+        safeAnalysis.forEach((plan, index) => {
+            const name = plan.module_name || `模块${index+1}`;
+            md += `## ${name}\n`;
+            const streamA = Array.isArray(plan.planned_stream_a_scenarios) ? plan.planned_stream_a_scenarios : [];
+
+            // 仅展示业务逻辑 (Stream A)
+            if (streamA.length > 0) {
+                // 不再添加中间的 "Stream A" 节点，直接列出用例，看起来更清爽
+                streamA.forEach((s, i) => md += `- ${escapeMarkdown(s)} \n`);
+            }
+        });
+
+        console.log("📝 Markdown 长度:", md.length);
+
+        try {
+            const { Transformer, Markmap } = window.markmap;
+            const transformer = new Transformer();
+            const { root } = transformer.transform(md);
+
+            if (markmapInstance) {
+                markmapInstance.setData(root);
+                markmapInstance.fit();
+            } else {
+                markmapInstance = Markmap.create(svgEl, {
+                    spacingHorizontal: 80,
+                    duration: 0,
+                    fitRatio: 0.95,
+                    // ⚠️ 关键设置：Infinity 代表“展开所有层级”，不再折叠
+                    initialExpandLevel: Infinity
+                }, root);
+            }
+        } catch (e) {
+            console.error("Markmap 绘制异常:", e);
+        }
+    }
+
+    // --- 视图切换 ---
+    window.switchView = function(view) {
+        const btnList = document.getElementById('btn-view-list');
+        const btnMap = document.getElementById('btn-view-map');
+
+        if(view === 'list') {
+            els.views.listView.classList.remove('hidden');
+            els.views.mapView.classList.add('hidden');
+            btnList.className = 'px-3 py-1 rounded-md bg-white shadow text-primary font-medium transition-all';
+            btnMap.className = 'px-3 py-1 rounded-md text-gray-500 hover:text-gray-700 font-medium transition-all';
+        } else {
+            els.views.listView.classList.add('hidden');
+            els.views.mapView.classList.remove('hidden');
+
+            btnMap.className = 'px-3 py-1 rounded-md bg-white shadow text-primary font-medium transition-all';
+            btnList.className = 'px-3 py-1 rounded-md text-gray-500 hover:text-gray-700 font-medium transition-all';
+
+            setTimeout(() => {
+                if(markmapInstance) {
+                    markmapInstance.fit();
+                    setTimeout(() => markmapInstance.fit(), 50);
+                }
+            }, 100);
+        }
+    }
+
+    function toggleState(state) {
+        els.views.empty.classList.add('hidden');
+        els.views.loading.classList.add('hidden');
+        els.views.error.classList.add('hidden');
+        els.views.wrapper.classList.add('hidden');
+        els.views.switcher.style.display = 'none';
+
+        if(state === 'loading') els.views.loading.classList.remove('hidden');
+        if(state === 'error') els.views.error.classList.remove('hidden');
+        if(state === 'success') {
+            els.views.wrapper.classList.remove('hidden');
+            els.views.switcher.style.display = 'flex';
+        }
+    }
+
+    function processRefLinks(text) {
+        return text ? String(text).replace(/\[参考图\s*(\d+)(?:-[^\]]+)?\]/g, (match, id) => `<span class="text-primary font-bold mx-1 hover:underline select-none" onclick="previewImage('${id}');event.stopPropagation()">${match}</span>`) : '';
+    }
+    window.previewImage = (id) => {
+        const d = globalImages[id];
+        if(!d) return showToast('图片不存在', 'warning');
+        document.getElementById('modal-image-el').src = d.startsWith('data:') ? d : `data:image/jpeg;base64,${d}`;
+        document.getElementById('image-modal').classList.remove('hidden');
+    }
+    window.closeImageModal = () => document.getElementById('image-modal').classList.add('hidden');
     function showToast(msg, type='info') {
-      toastEl.classList.remove('opacity-0', 'pointer-events-none');
-      toastMessageEl.textContent = msg;
-      let color = type === 'success' ? 'text-success' : (type === 'warning' ? 'text-warning' : 'text-primary');
-      let icon = type === 'success' ? 'fa-check-circle' : (type === 'warning' ? 'fa-exclamation-triangle' : 'fa-info-circle');
-      toastIconEl.className = `fa ${icon} ${color} text-lg`;
-      setTimeout(() => toastEl.classList.add('opacity-0', 'pointer-events-none'), 3000);
+        const t = document.getElementById('toast');
+        document.getElementById('toast-message').innerText = msg;
+        t.className = `fixed bottom-4 right-4 px-4 py-3 rounded-lg shadow-lg transition-all duration-300 flex items-center z-50 border ${type==='success'?'bg-green-50 border-green-200 text-green-700':type==='warning'?'bg-orange-50 border-orange-200 text-orange-700':'bg-white text-gray-700'}`;
+        t.classList.remove('opacity-0', 'pointer-events-none');
+        setTimeout(()=>t.classList.add('opacity-0', 'pointer-events-none'), 3000);
     }
-
-    function escapeHtml(unsafe) {
-      if (!unsafe) return '';
-      return String(unsafe).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-    }
+    function escapeHtml(str) { return str ? String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") : ''; }
+    function escapeMarkdown(str) { return str ? String(str).replace(/[\[\]#\-*]/g, '') : ''; }
   </script>
 </body>
 </html>

@@ -38,10 +38,12 @@ async def generate_from_feishu(req: FeishuRequest):
                 img_count += 1
                 image_map[str(img_count)] = node['base64']
         result_dict = await generate_test_cases_llm(parsed_data)
+
         return {
             "status": "success",
             "data": {
                 "cases": result_dict["cases"],
+                "analysis": result_dict.get("analysis", []),
                 "images": image_map
             }
         }
