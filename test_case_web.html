@@ -105,8 +105,8 @@
           <div class="flex items-center space-x-3">
             <h3 class="font-semibold text-dark">生成结果</h3>
             <div class="flex bg-gray-200 p-0.5 rounded-lg text-xs" id="view-switcher" style="display:none">
-                <button onclick="switchView('list')" id="btn-view-list" class="px-3 py-1 rounded-md bg-white shadow text-primary font-medium transition-all">列表</button>
-                <button onclick="switchView('map')" id="btn-view-map" class="px-3 py-1 rounded-md text-gray-500 hover:text-gray-700 font-medium transition-all">业务逻辑导图</button>
+                <button onclick="switchView('list')" id="btn-view-list" class="px-3 py-1 rounded-md bg-white shadow text-primary font-medium transition-all">列表视图</button>
+                <button onclick="switchView('map')" id="btn-view-map" class="px-3 py-1 rounded-md text-gray-500 hover:text-gray-700 font-medium transition-all">全景策略导图</button>
             </div>
           </div>
           <div class="flex space-x-2">
@@ -118,7 +118,7 @@
         <div class="relative flex-grow bg-gray-50/50 flex flex-col overflow-hidden">
 
           <div id="result-empty" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400 z-10"><i class="fa fa-cube text-5xl mb-4 text-gray-200"></i><p>请配置参数并点击生成</p></div>
-          <div id="result-loading" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500 hidden bg-white z-20"><div class="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin mb-4"></div><p class="animate-pulse">AI 正在深度分析业务逻辑...</p></div>
+          <div id="result-loading" class="absolute inset-0 flex flex-col items-center justify-center text-gray-500 hidden bg-white z-20"><div class="w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full animate-spin mb-4"></div><p class="animate-pulse">AI 正在执行三流策略分析...</p></div>
           <div id="result-error" class="absolute inset-0 flex flex-col items-center justify-center text-danger hidden bg-white z-20 px-10 text-center"><i class="fa fa-exclamation-triangle text-3xl mb-3"></i><p id="error-message">生成失败</p></div>
 
           <div id="content-wrapper" class="flex-grow overflow-y-auto custom-scrollbar p-4 hidden space-y-4 relative">
@@ -126,7 +126,7 @@
             <div id="ai-thought-panel" class="bg-indigo-50 border border-indigo-100 rounded-xl overflow-hidden hidden flex-none">
                 <button id="toggle-thought-btn" class="w-full px-4 py-3 flex justify-between items-center bg-indigo-100/50 hover:bg-indigo-100 transition-colors">
                   <div class="flex items-center text-indigo-700 font-bold text-sm">
-                    <i class="fa fa-brain mr-2"></i> AI 深度分析思维链 (输入域 & 约束)
+                    <i class="fa fa-brain mr-2"></i> AI 深度分析思维链 (约束与输入域)
                   </div>
                   <i class="fa fa-chevron-down text-indigo-500 transition-transform" id="thought-arrow"></i>
                 </button>
@@ -137,7 +137,7 @@
 
             <div id="result-map-view" class="hidden absolute inset-0 bg-white z-30 flex flex-col">
                 <div class="flex-none p-2 bg-gray-50 border-b text-xs text-gray-500 flex justify-between">
-                    <span>提示：滚轮缩放 / 拖拽移动 / 仅展示业务逻辑</span>
+                    <span>提示：滚轮缩放 / 拖拽移动 / 展示 A/B/C 三流策略</span>
                     <span class="text-gray-400">Powered by Markmap</span>
                 </div>
                 <div class="flex-grow relative w-full h-full overflow-hidden">
@@ -201,6 +201,7 @@
     });
 
     // --- 核心操作：生成 ---
+    // --- 核心操作：生成 (流式处理版) ---
     els.generateBtn.addEventListener('click', async () => {
         const params = {
             doc_url: els.docUrl.value.trim(),
@@ -214,32 +215,47 @@
         localStorage.setItem('feishu_app_id', params.app_id);
         localStorage.setItem('feishu_app_secret', params.app_secret);
 
+        // 重置状态
         toggleState('loading');
+        els.views.loading.querySelector('p').innerText = "正在连接服务器...";
+        globalCases = [];
+        globalAnalysis = [];
+        globalImages = {};
 
         try {
-            const res = await fetch(API_URL, {
+            const response = await fetch(API_URL, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(params)
             });
-            const json = await res.json();
 
-            if(json.status === 'success') {
-                globalCases = json.data.cases || [];
-                // 兼容字段名 analysis_and_plan
-                globalAnalysis = json.data.analysis_and_plan || json.data.analysis || [];
-                globalImages = json.data.images || {};
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
 
-                renderAnalysis(globalAnalysis);
-                renderList(globalCases);
-                // 渲染导图
-                setTimeout(() => renderMap(globalAnalysis), 100);
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
 
-                toggleState('success');
-                showToast(`生成成功！`, 'success');
-            } else {
-                throw new Error(json.message || '未知错误');
+                // 解码当前数据块并拼接到缓存中
+                buffer += decoder.decode(value, { stream: true });
+
+                // 按换行符分割处理（处理粘包问题）
+                const lines = buffer.split('\n');
+                // 最后一行可能不完整，留到下一次处理
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                    if (!line.trim()) continue;
+                    try {
+                        const msg = JSON.parse(line);
+                        handleStreamMessage(msg);
+                    } catch (err) {
+                        console.error("JSON Parse Error:", err);
+                    }
+                }
             }
+
         } catch (e) {
             console.error(e);
             document.getElementById('error-message').innerText = e.message || '服务连接超时';
@@ -247,20 +263,58 @@
         }
     });
 
-    els.copyBtn.addEventListener('click', () => {
-        if(!globalCases.length) return showToast('无数据');
-        navigator.clipboard.writeText(JSON.stringify(globalCases, null, 2))
-            .then(()=>showToast('JSON 已复制', 'success'));
-    });
+    // --- 处理流式消息的函数 ---
+    function handleStreamMessage(msg) {
+        console.log("收到流消息:", msg.type);
 
-    els.exportBtn.addEventListener('click', () => {
-        if(!globalCases.length) return showToast('无数据');
-        const blob = new Blob([JSON.stringify(globalCases, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = `cases_${Date.now()}.json`;
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    });
+        switch (msg.type) {
+            case 'log':
+                // 更新 Loading 界面上的文字提示
+                els.views.loading.querySelector('p').innerText = msg.message;
+                break;
+
+            case 'images':
+                // 保存图片数据
+                globalImages = msg.data;
+                break;
+
+            case 'analysis':
+                // 1. 收到分析结果，立即渲染思维导图和分析面板
+                globalAnalysis = msg.data;
+
+                // 切换到成功状态（此时还没有 Case，但我们要显示导图了）
+                toggleState('success');
+
+                // 渲染分析面板
+                renderAnalysis(globalAnalysis);
+
+                // 渲染导图
+                renderMap(globalAnalysis);
+
+                // 自动切换到“全景策略导图”视图，让用户先看图
+                switchView('map');
+
+                showToast('策略制定完成，正在生成详细用例...', 'info');
+                break;
+
+            case 'cases':
+                // 2. 收到测试用例，渲染列表
+                globalCases = msg.data;
+                renderList(globalCases);
+                showToast(`生成成功！共 ${globalCases.length} 条用例`, 'success');
+                // 如果用户还在看图，提示他可以看列表了，或者你也可以不自动切，让用户自己切
+                break;
+
+            case 'error':
+                document.getElementById('error-message').innerText = msg.message;
+                toggleState('error');
+                break;
+
+            case 'done':
+                console.log("流式传输结束");
+                break;
+        }
+    }
 
     // --- 渲染逻辑 ---
 
@@ -322,29 +376,49 @@
         `).join('');
     }
 
-    // --- 3. 渲染思维导图 (修正版：默认展开全部) ---
+    // --- 3. 渲染思维导图 (升级版：三流策略全景) ---
     function renderMap(analysis) {
-        console.log("🔍 [Debug] 开始渲染业务逻辑导图");
+        console.log("🔍 [Debug] 开始渲染三流策略导图");
         if (!window.markmap) return showToast("Markmap 组件未加载", "warning");
         const svgEl = document.getElementById('markmap');
         svgEl.innerHTML = '';
 
-        let md = '# 业务逻辑全景图\n';
+        let md = '# 🚀 测试策略全景图 (Triple Stream)\n';
         const safeAnalysis = Array.isArray(analysis) ? analysis : [];
+
+        if (safeAnalysis.length === 0) {
+            md += '## 暂无分析数据';
+        }
 
         safeAnalysis.forEach((plan, index) => {
             const name = plan.module_name || `模块${index+1}`;
-            md += `## ${name}\n`;
-            const streamA = Array.isArray(plan.planned_stream_a_scenarios) ? plan.planned_stream_a_scenarios : [];
+            md += `## 📦 ${name}\n`;
 
-            // 仅展示业务逻辑 (Stream A)
+            const streamA = plan.planned_stream_a_scenarios || [];
+            const streamB = plan.planned_stream_b_scenarios || [];
+            const streamC = plan.planned_stream_c_scenarios || [];
+
+            // Stream A: 业务闭环
             if (streamA.length > 0) {
-                // 不再添加中间的 "Stream A" 节点，直接列出用例，看起来更清爽
-                streamA.forEach((s, i) => md += `- ${escapeMarkdown(s)} \n`);
+                md += `### 🟢 Stream A: 业务闭环\n`;
+                streamA.forEach(s => md += `- ${escapeMarkdown(s)}\n`);
+            }
+
+            // Stream B: 通用检查
+            if (streamB.length > 0) {
+                md += `### 🔵 Stream B: 通用/边界检查\n`;
+                streamB.forEach(s => md += `- ${escapeMarkdown(s)}\n`);
+            }
+
+            // Stream C: 跨模块集成
+            if (streamC.length > 0) {
+                md += `### 🟣 Stream C: 跨模块集成\n`;
+                streamC.forEach(s => md += `- ${escapeMarkdown(s)}\n`);
             }
         });
 
-        console.log("📝 Markdown 长度:", md.length);
+        // 调试：输出 Markdown 内容长度
+        // console.log(md);
 
         try {
             const { Transformer, Markmap } = window.markmap;
@@ -359,12 +433,12 @@
                     spacingHorizontal: 80,
                     duration: 0,
                     fitRatio: 0.95,
-                    // ⚠️ 关键设置：Infinity 代表“展开所有层级”，不再折叠
-                    initialExpandLevel: Infinity
+                    initialExpandLevel: 2 // 默认展开到 Stream 层级
                 }, root);
             }
         } catch (e) {
             console.error("Markmap 绘制异常:", e);
+            showToast("导图渲染出错", "warning");
         }
     }
 

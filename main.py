@@ -23,21 +23,26 @@ class FeishuRequest(BaseModel):
     app_secret: str = Field(..., description="飞书 App Secret")
 
 
-@app.post("/generate_from_feishu")
-async def generate_from_feishu(req: FeishuRequest):
-    print(f"收到请求: {req.doc_url}")
+import json
+import traceback
+from fastapi.responses import StreamingResponse
 
+
+# 定义流式生成器函数
+async def generate_stream_process(req: FeishuRequest):
     try:
-        # 1. 解析飞书文档
+        # --- 阶段 1: 解析文档 ---
+        # 立即告诉前端正在解析
+        yield json.dumps({"type": "log", "message": "正在解析飞书文档..."}) + "\n"
+
         parser = FeishuDocParser(req.app_id, req.app_secret)
         parsed_data = parser.parse(req.doc_url)
 
         if not parsed_data:
-            return {"status": "error", "message": "文档解析为空，请检查链接或权限"}
+            yield json.dumps({"type": "error", "message": "文档解析为空"}) + "\n"
+            return
 
-        print(f"解析成功，共 {len(parsed_data)} 个节点，正在发送给 LLM...")
-
-        # 2. 提取图片映射 (前端展示 visual_evidence 需要用到)
+        # 提取图片并先发送给前端（这样前端之后的渲染就能找到图片了）
         image_map = {}
         img_count = 0
         for node in parsed_data:
@@ -45,45 +50,60 @@ async def generate_from_feishu(req: FeishuRequest):
                 img_count += 1
                 image_map[str(img_count)] = node['base64']
 
-        # 3. 准备 LLM 上下文
+        # 发送图片数据
+        yield json.dumps({"type": "images", "data": image_map}) + "\n"
+
+        # --- 阶段 2: AI 分析 (生成导图) ---
+        yield json.dumps({"type": "log", "message": "正在进行 AI 深度分析与策略制定..."}) + "\n"
+
         llm = get_llm()
         content_parts = build_content_parts(parsed_data)
 
-        # 4. 执行 Step 1: 规划 (Plan)
+        # 执行 Step 1
         plan_result = await step_1_analyze_and_plan(llm, content_parts)
 
-        # 5. 执行 Step 2: 生成 (Generate)
-        case_result = await step_2_generate_cases(llm, content_parts, plan_result)
-
-        # 6. 数据格式化 (Pydantic -> Dict)
-        final_cases = [
-            c.model_dump() if hasattr(c, 'model_dump') else c.dict()
-            for c in case_result.cases
-        ]
         final_analysis = [
             p.model_dump() if hasattr(p, 'model_dump') else p.dict()
             for p in plan_result.analysis_and_plan
         ]
 
-        # 7. 【关键修复】构建符合前端预期的返回结构
-        # 前端期待结构: { "status": "success", "data": { "cases": [], "analysis": [], "images": {} } }
-        return {
-            "status": "success",
-            "data": {
-                "cases": final_cases,
-                "analysis": final_analysis,
-                "images": image_map
-            }
-        }
+        # 🔥 关键点：分析完成后，立即 yield 发送给前端
+        yield json.dumps({
+            "type": "analysis",
+            "data": final_analysis
+        }) + "\n"
+
+        # --- 阶段 3: AI 生成用例 ---
+        yield json.dumps({"type": "log", "message": "策略已确认，正在生成详细测试用例..."}) + "\n"
+
+        # 执行 Step 2
+        case_result = await step_2_generate_cases(llm, content_parts, plan_result)
+
+        final_cases = [
+            c.model_dump() if hasattr(c, 'model_dump') else c.dict()
+            for c in case_result.cases
+        ]
+
+        # 🔥 关键点：用例生成后，发送给前端
+        yield json.dumps({
+            "type": "cases",
+            "data": final_cases
+        }) + "\n"
+
+        yield json.dumps({"type": "done", "message": "生成完毕"}) + "\n"
 
     except Exception as e:
         error_msg = traceback.format_exc()
         print(f"🔥 流程异常: {e}")
-        return {
-            "status": "error",
-            "message": str(e),
-            "traceback": error_msg
-        }
+        yield json.dumps({"type": "error", "message": str(e)}) + "\n"
+
+
+# 接口入口
+@app.post("/generate_from_feishu")
+async def generate_from_feishu(req: FeishuRequest):
+    print(f"收到请求: {req.doc_url}")
+    # 使用 StreamingResponse 包装生成器，media_type 设为 x-ndjson
+    return StreamingResponse(generate_stream_process(req), media_type="application/x-ndjson")
 
 
 if __name__ == "__main__":
