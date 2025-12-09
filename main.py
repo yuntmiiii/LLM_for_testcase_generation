@@ -28,11 +28,9 @@ import traceback
 from fastapi.responses import StreamingResponse
 
 
-# 定义流式生成器函数
 async def generate_stream_process(req: FeishuRequest):
     try:
         # --- 阶段 1: 解析文档 ---
-        # 立即告诉前端正在解析
         yield json.dumps({"type": "log", "message": "正在解析飞书文档..."}) + "\n"
 
         parser = FeishuDocParser(req.app_id, req.app_secret)
@@ -42,7 +40,6 @@ async def generate_stream_process(req: FeishuRequest):
             yield json.dumps({"type": "error", "message": "文档解析为空"}) + "\n"
             return
 
-        # 提取图片并先发送给前端（这样前端之后的渲染就能找到图片了）
         image_map = {}
         img_count = 0
         for node in parsed_data:
@@ -67,13 +64,11 @@ async def generate_stream_process(req: FeishuRequest):
             for p in plan_result.analysis_and_plan
         ]
 
-        # 🔥 关键点：分析完成后，立即 yield 发送给前端
         yield json.dumps({
             "type": "analysis",
             "data": final_analysis
         }) + "\n"
 
-        # --- 阶段 3: AI 生成用例 ---
         yield json.dumps({"type": "log", "message": "策略已确认，正在生成详细测试用例..."}) + "\n"
 
         # 执行 Step 2
@@ -84,7 +79,6 @@ async def generate_stream_process(req: FeishuRequest):
             for c in case_result.cases
         ]
 
-        # 🔥 关键点：用例生成后，发送给前端
         yield json.dumps({
             "type": "cases",
             "data": final_cases
@@ -102,7 +96,6 @@ async def generate_stream_process(req: FeishuRequest):
 @app.post("/generate_from_feishu")
 async def generate_from_feishu(req: FeishuRequest):
     print(f"收到请求: {req.doc_url}")
-    # 使用 StreamingResponse 包装生成器，media_type 设为 x-ndjson
     return StreamingResponse(generate_stream_process(req), media_type="application/x-ndjson")
 
 

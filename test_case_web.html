@@ -42,7 +42,7 @@
     @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     .fade-in { animation: fadeIn 0.5s ease-in-out; }
 
-    /* Markmap 容器修正：确保在绝对定位下有高度 */
+    /* Markmap 容器修正 */
     svg#markmap {
         width: 100%;
         height: 100%;
@@ -123,14 +123,15 @@
 
           <div id="content-wrapper" class="flex-grow overflow-y-auto custom-scrollbar p-4 hidden space-y-4 relative">
 
-            <div id="ai-thought-panel" class="bg-indigo-50 border border-indigo-100 rounded-xl overflow-hidden hidden flex-none">
-                <button id="toggle-thought-btn" class="w-full px-4 py-3 flex justify-between items-center bg-indigo-100/50 hover:bg-indigo-100 transition-colors">
+            <div id="ai-thought-panel" class="bg-indigo-50 border border-indigo-100 rounded-xl overflow-hidden hidden flex-none transition-all mb-4">
+                <button type="button" id="toggle-thought-btn" class="w-full px-4 py-3 flex justify-between items-center bg-indigo-100/50 hover:bg-indigo-100 transition-colors cursor-pointer focus:outline-none">
                   <div class="flex items-center text-indigo-700 font-bold text-sm">
-                    <i class="fa fa-brain mr-2"></i> AI 深度分析思维链 (约束与输入域)
+                    <i class="fa fa-brain mr-2"></i> AI 深度分析思维链 (点击展开/收起)
                   </div>
-                  <i class="fa fa-chevron-down text-indigo-500 transition-transform" id="thought-arrow"></i>
+                  <i class="fa fa-chevron-down text-indigo-500 transition-transform duration-200" id="thought-arrow"></i>
                 </button>
-                <div id="thought-content" class="hidden px-4 py-4 space-y-4"></div>
+                <div id="thought-content" class="hidden px-4 py-4 space-y-4">
+                    </div>
             </div>
 
             <div id="result-list-view" class="space-y-4 pb-10"></div>
@@ -164,23 +165,19 @@
   </div>
 
 <script>
-    // --- 配置区 ---
     const API_URL = 'http://localhost:8000/generate_from_feishu';
 
-    // --- 全局变量 ---
     let globalImages = {};
     let globalCases = [];
     let globalAnalysis = [];
     let markmapInstance = null;
 
-    // --- DOM 元素引用 ---
+    // DOM 元素引用
     const els = {
         docUrl: document.getElementById('doc-url'),
         appId: document.getElementById('app-id'),
         appSecret: document.getElementById('app-secret'),
         generateBtn: document.getElementById('generate-btn'),
-        copyBtn: document.getElementById('copy-btn'),
-        exportBtn: document.getElementById('export-btn'),
         views: {
             empty: document.getElementById('result-empty'),
             loading: document.getElementById('result-loading'),
@@ -194,14 +191,27 @@
         }
     };
 
-    // --- 初始化 ---
+    // --- 初始化事件绑定 ---
     document.addEventListener('DOMContentLoaded', () => {
+        // 恢复配置
         if(localStorage.getItem('feishu_app_id')) els.appId.value = localStorage.getItem('feishu_app_id');
         if(localStorage.getItem('feishu_app_secret')) els.appSecret.value = localStorage.getItem('feishu_app_secret');
+
+        // 绑定思维链折叠事件
+        const toggleBtn = document.getElementById('toggle-thought-btn');
+        const thoughtContent = document.getElementById('thought-content');
+        const arrow = document.getElementById('thought-arrow');
+
+        if (toggleBtn && thoughtContent && arrow) {
+            toggleBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                thoughtContent.classList.toggle('hidden');
+                arrow.style.transform = thoughtContent.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
+            });
+        }
     });
 
-    // --- 核心操作：生成 ---
-    // --- 核心操作：生成 (流式处理版) ---
+    // --- 生成逻辑 ---
     els.generateBtn.addEventListener('click', async () => {
         const params = {
             doc_url: els.docUrl.value.trim(),
@@ -215,12 +225,15 @@
         localStorage.setItem('feishu_app_id', params.app_id);
         localStorage.setItem('feishu_app_secret', params.app_secret);
 
-        // 重置状态
         toggleState('loading');
         els.views.loading.querySelector('p').innerText = "正在连接服务器...";
         globalCases = [];
         globalAnalysis = [];
         globalImages = {};
+
+        // 每次生成前重置思维链面板状态
+        els.views.thoughtPanel.classList.add('hidden');
+        els.views.thoughtContent.innerHTML = '';
 
         try {
             const response = await fetch(API_URL, {
@@ -237,12 +250,8 @@
                 const { done, value } = await reader.read();
                 if (done) break;
 
-                // 解码当前数据块并拼接到缓存中
                 buffer += decoder.decode(value, { stream: true });
-
-                // 按换行符分割处理（处理粘包问题）
                 const lines = buffer.split('\n');
-                // 最后一行可能不完整，留到下一次处理
                 buffer = lines.pop();
 
                 for (const line of lines) {
@@ -263,96 +272,128 @@
         }
     });
 
-    // --- 处理流式消息的函数 ---
     function handleStreamMessage(msg) {
-        console.log("收到流消息:", msg.type);
-
         switch (msg.type) {
             case 'log':
-                // 更新 Loading 界面上的文字提示
                 els.views.loading.querySelector('p').innerText = msg.message;
                 break;
-
             case 'images':
-                // 保存图片数据
                 globalImages = msg.data;
                 break;
-
             case 'analysis':
-                // 1. 收到分析结果，立即渲染思维导图和分析面板
                 globalAnalysis = msg.data;
-
-                // 切换到成功状态（此时还没有 Case，但我们要显示导图了）
                 toggleState('success');
-
-                // 渲染分析面板
-                renderAnalysis(globalAnalysis);
-
-                // 渲染导图
-                renderMap(globalAnalysis);
-
-                // 自动切换到“全景策略导图”视图，让用户先看图
-                switchView('map');
-
+                renderAnalysis(globalAnalysis); // 渲染思维链
+                renderMap(globalAnalysis);      // 渲染导图
+                switchView('map');              // 默认看图
                 showToast('策略制定完成，正在生成详细用例...', 'info');
                 break;
-
             case 'cases':
-                // 2. 收到测试用例，渲染列表
                 globalCases = msg.data;
                 renderList(globalCases);
                 showToast(`生成成功！共 ${globalCases.length} 条用例`, 'success');
-                // 如果用户还在看图，提示他可以看列表了，或者你也可以不自动切，让用户自己切
                 break;
-
             case 'error':
                 document.getElementById('error-message').innerText = msg.message;
                 toggleState('error');
                 break;
-
-            case 'done':
-                console.log("流式传输结束");
-                break;
         }
     }
 
-    // --- 渲染逻辑 ---
-
+    // --- [核心修复] 渲染思维链 (增强类型兼容性) ---
     function renderAnalysis(analysisList) {
+        const thoughtPanel = document.getElementById('ai-thought-panel');
+        const thoughtContent = document.getElementById('thought-content');
+
+        if (!thoughtPanel || !thoughtContent) return;
+
         if (!analysisList || analysisList.length === 0) {
-            els.views.thoughtPanel.classList.add('hidden');
+            thoughtPanel.classList.add('hidden');
             return;
         }
-        els.views.thoughtPanel.classList.remove('hidden');
-        els.views.thoughtContent.innerHTML = analysisList.map(plan => `
-            <div class="bg-white p-4 rounded-lg border border-indigo-100 shadow-sm text-sm mb-3">
-                <div class="font-bold text-indigo-700 mb-3 flex items-center border-b border-gray-100 pb-2">
-                    <i class="fa fa-cube mr-2"></i>${escapeHtml(plan.module_name)}
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-2">Identified Inputs</span>
-                        <div class="flex flex-wrap gap-2">
-                            ${(plan.identified_inputs || []).map(i => `<span class="px-2 py-1 bg-gray-100 border border-gray-200 rounded text-xs text-gray-700">${escapeHtml(i)}</span>`).join('')}
+
+        // 辅助函数：安全地渲染列表或字符串
+        const renderSafeList = (data, iconClass) => {
+            // 如果是数组，渲染为 li
+            if (Array.isArray(data)) {
+                return data.map(item => `
+                    <li class="flex items-start">
+                        <span class="${iconClass} mr-2 font-bold">•</span>
+                        <span>${escapeHtml(item)}</span>
+                    </li>
+                `).join('');
+            }
+            // 如果是字符串，直接渲染
+            if (typeof data === 'string' && data.trim() !== '') {
+                 return `
+                    <li class="flex items-start">
+                        <span class="${iconClass} mr-2 font-bold">•</span>
+                        <span>${escapeHtml(data)}</span>
+                    </li>
+                `;
+            }
+            return '<li class="text-gray-400 pl-4">无内容</li>';
+        };
+
+        try {
+            const html = analysisList.map((plan, index) => `
+                <div class="bg-white p-4 rounded-lg border border-indigo-100 shadow-sm text-sm mb-4">
+                    <div class="font-bold text-indigo-700 mb-3 flex items-center border-b border-gray-100 pb-2">
+                        <span class="bg-indigo-100 text-indigo-700 w-5 h-5 rounded-full flex items-center justify-center text-xs mr-2">${index + 1}</span>
+                        ${escapeHtml(plan.module_name)}
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="space-y-4">
+                            <div>
+                                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1"><i class="fa fa-keyboard-o mr-1"></i>输入域 (Inputs)</span>
+                                <div class="flex flex-wrap gap-2">
+                                    ${(plan.identified_inputs || []).map(i => `<span class="px-2 py-1 bg-gray-100 border border-gray-200 rounded text-xs text-gray-700">${escapeHtml(i)}</span>`).join('') || '<span class="text-gray-400 text-xs">-</span>'}
+                                </div>
+                            </div>
+                            <div>
+                                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1"><i class="fa fa-users mr-1"></i>涉及角色 (Roles)</span>
+                                <div class="flex flex-wrap gap-2">
+                                    ${(plan.involved_roles || []).map(r => `<span class="px-2 py-1 bg-blue-50 border border-blue-100 text-blue-700 rounded text-xs"><i class="fa fa-user-circle-o mr-1"></i>${escapeHtml(r)}</span>`).join('') || '<span class="text-gray-400 text-xs">无特定角色</span>'}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="space-y-4">
+                            <div>
+                                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1"><i class="fa fa-database mr-1"></i>数据要求 (Data)</span>
+                                <ul class="list-disc pl-4 space-y-1 text-xs text-gray-600 bg-gray-50 p-2 rounded max-h-24 overflow-y-auto custom-scrollbar border border-gray-100">
+                                    ${renderSafeList(plan.data_requirements, 'hidden')}
+                                    </ul>
+                            </div>
+                            <div>
+                                <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-1"><i class="fa fa-ban mr-1"></i>业务约束 (Constraints)</span>
+                                <ul class="list-disc pl-4 space-y-1 text-xs text-gray-600 bg-gray-50 p-2 rounded max-h-24 overflow-y-auto custom-scrollbar border border-gray-100">
+                                    ${(plan.business_constraints || []).map(c => `<li class="leading-relaxed">${escapeHtml(c)}</li>`).join('') || '<li class="text-gray-400 list-none">无明确约束</li>'}
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div class="md:col-span-2 mt-2">
+                            <div class="bg-orange-50/50 border border-orange-100 rounded p-3">
+                                <span class="text-xs font-bold text-orange-600 uppercase tracking-wider block mb-2">
+                                    <i class="fa fa-exclamation-triangle mr-1"></i>风险评估 (Risk Assessment)
+                                </span>
+                                <ul class="space-y-1 text-xs text-gray-700">
+                                    ${renderSafeList(plan.risk_assessment, 'text-orange-400')}
+                                </ul>
+                            </div>
                         </div>
                     </div>
-                    <div>
-                        <span class="text-xs font-bold text-gray-500 uppercase tracking-wider block mb-2">Business Constraints</span>
-                        <ul class="list-disc pl-4 space-y-1 text-xs text-gray-600 bg-gray-50/50 p-2 rounded max-h-40 overflow-y-auto custom-scrollbar">
-                            ${(plan.business_constraints || []).map(c => `<li class="leading-relaxed">${escapeHtml(c)}</li>`).join('')}
-                        </ul>
-                    </div>
                 </div>
-            </div>
-        `).join('');
+            `).join('');
 
-        const btn = document.getElementById('toggle-thought-btn');
-        const newBtn = btn.cloneNode(true);
-        btn.parentNode.replaceChild(newBtn, btn);
-        newBtn.addEventListener('click', () => {
-            els.views.thoughtContent.classList.toggle('hidden');
-            document.getElementById('thought-arrow').style.transform = els.views.thoughtContent.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
-        });
+            thoughtContent.innerHTML = html;
+
+        } catch (e) {
+            console.error("渲染思维链严重错误:", e);
+            thoughtContent.innerHTML = '<div class="text-danger p-2">渲染失败，请查看控制台错误信息</div>';
+        }
     }
 
     function renderList(cases) {
@@ -376,49 +417,30 @@
         `).join('');
     }
 
-    // --- 3. 渲染思维导图 (升级版：三流策略全景) ---
     function renderMap(analysis) {
-        console.log("🔍 [Debug] 开始渲染三流策略导图");
         if (!window.markmap) return showToast("Markmap 组件未加载", "warning");
         const svgEl = document.getElementById('markmap');
         svgEl.innerHTML = '';
 
-        let md = '# 🚀 测试策略全景图 (Triple Stream)\n';
+        let md = '# 🚀 测试策略全景图\n';
         const safeAnalysis = Array.isArray(analysis) ? analysis : [];
-
-        if (safeAnalysis.length === 0) {
-            md += '## 暂无分析数据';
-        }
+        if (safeAnalysis.length === 0) md += '## 暂无分析数据';
 
         safeAnalysis.forEach((plan, index) => {
             const name = plan.module_name || `模块${index+1}`;
             md += `## 📦 ${name}\n`;
-
-            const streamA = plan.planned_stream_a_scenarios || [];
-            const streamB = plan.planned_stream_b_scenarios || [];
-            const streamC = plan.planned_stream_c_scenarios || [];
-
-            // Stream A: 业务闭环
-            if (streamA.length > 0) {
-                md += `### 🟢 Stream A: 业务闭环\n`;
-                streamA.forEach(s => md += `- ${escapeMarkdown(s)}\n`);
-            }
-
-            // Stream B: 通用检查
-            if (streamB.length > 0) {
-                md += `### 🔵 Stream B: 通用/边界检查\n`;
-                streamB.forEach(s => md += `- ${escapeMarkdown(s)}\n`);
-            }
-
-            // Stream C: 跨模块集成
-            if (streamC.length > 0) {
-                md += `### 🟣 Stream C: 跨模块集成\n`;
-                streamC.forEach(s => md += `- ${escapeMarkdown(s)}\n`);
-            }
+            const streams = [
+                { title: '🟢 Stream A: 业务闭环', data: plan.planned_stream_a_scenarios },
+                { title: '🔵 Stream B: 交互检查', data: plan.planned_stream_b_scenarios },
+                { title: '🟣 Stream C: 集成流转', data: plan.planned_stream_c_scenarios }
+            ];
+            streams.forEach(stream => {
+                if (stream.data && stream.data.length > 0) {
+                    md += `### ${stream.title}\n`;
+                    stream.data.forEach(s => md += `- ${escapeMarkdown(s)}\n`);
+                }
+            });
         });
-
-        // 调试：输出 Markdown 内容长度
-        // console.log(md);
 
         try {
             const { Transformer, Markmap } = window.markmap;
@@ -433,16 +455,14 @@
                     spacingHorizontal: 80,
                     duration: 0,
                     fitRatio: 0.95,
-                    initialExpandLevel: 2 // 默认展开到 Stream 层级
+                    initialExpandLevel: 2
                 }, root);
             }
         } catch (e) {
             console.error("Markmap 绘制异常:", e);
-            showToast("导图渲染出错", "warning");
         }
     }
 
-    // --- 视图切换 ---
     window.switchView = function(view) {
         const btnList = document.getElementById('btn-view-list');
         const btnMap = document.getElementById('btn-view-map');
@@ -450,21 +470,22 @@
         if(view === 'list') {
             els.views.listView.classList.remove('hidden');
             els.views.mapView.classList.add('hidden');
-            btnList.className = 'px-3 py-1 rounded-md bg-white shadow text-primary font-medium transition-all';
-            btnMap.className = 'px-3 py-1 rounded-md text-gray-500 hover:text-gray-700 font-medium transition-all';
+            // 如果有数据，显示面板（内容由 renderAnalysis 填充，这里只控制容器显隐）
+            if (globalAnalysis && globalAnalysis.length > 0) {
+                els.views.thoughtPanel.classList.remove('hidden');
+            }
+            if(btnList) btnList.className = 'px-3 py-1 rounded-md bg-white shadow text-primary font-medium transition-all';
+            if(btnMap) btnMap.className = 'px-3 py-1 rounded-md text-gray-500 hover:text-gray-700 font-medium transition-all';
         } else {
             els.views.listView.classList.add('hidden');
             els.views.mapView.classList.remove('hidden');
+            // 地图模式下隐藏思维链面板，给地图更多空间
+            els.views.thoughtPanel.classList.add('hidden');
 
-            btnMap.className = 'px-3 py-1 rounded-md bg-white shadow text-primary font-medium transition-all';
-            btnList.className = 'px-3 py-1 rounded-md text-gray-500 hover:text-gray-700 font-medium transition-all';
+            if(btnMap) btnMap.className = 'px-3 py-1 rounded-md bg-white shadow text-primary font-medium transition-all';
+            if(btnList) btnList.className = 'px-3 py-1 rounded-md text-gray-500 hover:text-gray-700 font-medium transition-all';
 
-            setTimeout(() => {
-                if(markmapInstance) {
-                    markmapInstance.fit();
-                    setTimeout(() => markmapInstance.fit(), 50);
-                }
-            }, 100);
+            setTimeout(() => { if(markmapInstance) markmapInstance.fit(); }, 100);
         }
     }
 
