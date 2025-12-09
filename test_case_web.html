@@ -111,7 +111,7 @@
           </div>
           <div class="flex space-x-2">
             <button id="copy-btn" class="text-gray-600 hover:text-primary px-2 py-1 text-sm border rounded hover:bg-gray-100"><i class="fa fa-copy mr-1"></i>复制 JSON</button>
-            <button id="export-btn" class="text-gray-600 hover:text-primary px-2 py-1 text-sm border rounded hover:bg-gray-100"><i class="fa fa-download mr-1"></i>导出文件</button>
+            <button id="export-btn" class="text-gray-600 hover:text-primary px-2 py-1 text-sm border rounded hover:bg-gray-100"><i class="fa fa-link mr-1"></i>保存为链接</button>
           </div>
         </div>
 
@@ -165,7 +165,9 @@
   </div>
 
 <script>
-    const API_URL = 'http://localhost:8000/generate_from_feishu';
+    // **确保 API URL 显式指向 FastAPI 服务器的端口 8000**
+    const API_BASE_URL = 'http://localhost:8000';
+    const GENERATE_URL = `${API_BASE_URL}/generate_from_feishu`;
 
     let globalImages = {};
     let globalCases = [];
@@ -178,6 +180,8 @@
         appId: document.getElementById('app-id'),
         appSecret: document.getElementById('app-secret'),
         generateBtn: document.getElementById('generate-btn'),
+        copyBtn: document.getElementById('copy-btn'),
+        exportBtn: document.getElementById('export-btn'), // 保存链接按钮
         views: {
             empty: document.getElementById('result-empty'),
             loading: document.getElementById('result-loading'),
@@ -191,7 +195,16 @@
         }
     };
 
-    // --- 初始化事件绑定 ---
+    // --- 辅助函数：获取当前所有结果的 JSON 结构 ---
+    function getFinalResultJson() {
+        return {
+            cases: globalCases,
+            analysis: globalAnalysis,
+            images: globalImages
+        };
+    }
+
+    // --- 初始化事件绑定 (包含加载逻辑) ---
     document.addEventListener('DOMContentLoaded', () => {
         // 恢复配置
         if(localStorage.getItem('feishu_app_id')) els.appId.value = localStorage.getItem('feishu_app_id');
@@ -208,6 +221,17 @@
                 thoughtContent.classList.toggle('hidden');
                 arrow.style.transform = thoughtContent.classList.contains('hidden') ? 'rotate(0deg)' : 'rotate(180deg)';
             });
+        }
+
+        // **[新增]** 检查 URL 中的 key 参数并尝试加载
+        const urlParams = new URLSearchParams(window.location.search);
+        const loadKey = urlParams.get('key');
+
+        if (loadKey) {
+            loadResultFromKey(loadKey);
+        } else {
+             // 如果没有 key，则恢复默认状态
+             toggleState('empty');
         }
     });
 
@@ -236,11 +260,19 @@
         els.views.thoughtContent.innerHTML = '';
 
         try {
-            const response = await fetch(API_URL, {
+            // 使用 GENERATE_URL
+            const response = await fetch(GENERATE_URL, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(params)
             });
+
+            // 检查流式响应是否成功
+            if (!response.ok || !response.body) {
+                const errorText = await response.text();
+                throw new Error(`生成请求失败: ${response.status} ${response.statusText}. 响应: ${errorText.substring(0, 100)}...`);
+            }
+
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
@@ -282,9 +314,10 @@
                 break;
             case 'analysis':
                 globalAnalysis = msg.data;
+                // 成功接收到 analysis 后即切换到成功状态，并渲染
                 toggleState('success');
-                renderAnalysis(globalAnalysis); // 渲染思维链
-                renderMap(globalAnalysis);      // 渲染导图
+                renderAnalysis(globalAnalysis);
+                renderMap(globalAnalysis);
                 switchView('map');              // 默认看图
                 showToast('策略制定完成，正在生成详细用例...', 'info');
                 break;
@@ -297,10 +330,101 @@
                 document.getElementById('error-message').innerText = msg.message;
                 toggleState('error');
                 break;
+            case 'done':
+                // 完成消息
+                break;
         }
     }
 
-    // --- [核心修复] 渲染思维链 (增强类型兼容性) ---
+    // --- **[新增]** 根据 Key 加载结果的函数 ---
+    async function loadResultFromKey(key) {
+        toggleState('loading');
+        els.views.loading.querySelector('p').innerText = `正在加载 Key: ${key} 的测试用例...`;
+
+        try {
+            // 使用 API_BASE_URL 确保路径正确
+            const response = await fetch(`${API_BASE_URL}/load/${key}`);
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || `加载失败，HTTP 状态码: ${response.status}`);
+            }
+
+            const result = await response.json();
+
+            // 使用加载的数据更新全局变量
+            globalCases = result.cases || [];
+            globalAnalysis = result.analysis || [];
+            globalImages = result.images || {};
+
+            // 渲染结果
+            toggleState('success');
+            renderAnalysis(globalAnalysis);
+            renderMap(globalAnalysis);
+            renderList(globalCases);
+            // 默认切换到列表视图
+            switchView('list');
+
+            showToast(`加载成功！Key: ${key}`, 'success');
+
+        } catch (e) {
+            console.error("Load Error:", e);
+            document.getElementById('error-message').innerText = e.message || '加载失败，Key可能不存在';
+            toggleState('error');
+        }
+    }
+
+    // --- **[修改]** 保存为链接逻辑 ---
+    els.exportBtn.addEventListener('click', async () => {
+        if (globalCases.length === 0) {
+            return showToast('请先生成用例再保存', 'warning');
+        }
+
+        const finalJson = getFinalResultJson();
+
+        try {
+            // 使用 API_BASE_URL 确保路径正确
+            const saveResponse = await fetch(`${API_BASE_URL}/save_result`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ final_json: finalJson })
+            });
+
+            const data = await saveResponse.json();
+
+            if (saveResponse.ok && data.key) {
+                // data.url 返回格式为 /?key=RANDOMKEY
+                const fullUrl = `${window.location.origin}${data.url}`;
+
+                // 将链接复制到剪贴板
+                await navigator.clipboard.writeText(fullUrl);
+                showToast(`保存成功！链接已复制`, 'success');
+            } else {
+                showToast(data.detail || '保存失败', 'danger');
+            }
+
+        } catch (e) {
+            showToast('连接服务器保存失败，请检查后端服务', 'danger');
+            console.error("Save Error:", e);
+        }
+    });
+
+    // --- **[修改]** 复制 JSON 逻辑，改为复制完整的 JSON 结构 ---
+    els.copyBtn.addEventListener('click', () => {
+        if (globalCases.length === 0 && globalAnalysis.length === 0) {
+            return showToast('没有数据可复制', 'warning');
+        }
+
+        const finalJson = getFinalResultJson();
+        const jsonStr = JSON.stringify(finalJson, null, 2);
+
+        navigator.clipboard.writeText(jsonStr)
+            .then(() => showToast('完整 JSON 数据已复制到剪贴板', 'success'))
+            .catch(err => showToast('复制失败', 'danger'));
+    });
+
+
+    // --- 渲染思维链 (不变) ---
     function renderAnalysis(analysisList) {
         const thoughtPanel = document.getElementById('ai-thought-panel');
         const thoughtContent = document.getElementById('thought-content');
@@ -312,9 +436,7 @@
             return;
         }
 
-        // 辅助函数：安全地渲染列表或字符串
         const renderSafeList = (data, iconClass) => {
-            // 如果是数组，渲染为 li
             if (Array.isArray(data)) {
                 return data.map(item => `
                     <li class="flex items-start">
@@ -323,7 +445,6 @@
                     </li>
                 `).join('');
             }
-            // 如果是字符串，直接渲染
             if (typeof data === 'string' && data.trim() !== '') {
                  return `
                     <li class="flex items-start">
@@ -389,6 +510,7 @@
             `).join('');
 
             thoughtContent.innerHTML = html;
+            thoughtPanel.classList.remove('hidden');
 
         } catch (e) {
             console.error("渲染思维链严重错误:", e);
@@ -396,6 +518,7 @@
         }
     }
 
+    // --- 渲染列表 (不变) ---
     function renderList(cases) {
         if(!cases.length) {
             els.views.listView.innerHTML = '<div class="text-center text-gray-400 py-10">未生成任何用例</div>';
@@ -417,6 +540,7 @@
         `).join('');
     }
 
+    // --- 渲染导图 (不变) ---
     function renderMap(analysis) {
         if (!window.markmap) return showToast("Markmap 组件未加载", "warning");
         const svgEl = document.getElementById('markmap');
@@ -463,6 +587,7 @@
         }
     }
 
+    // --- 视图切换 (不变) ---
     window.switchView = function(view) {
         const btnList = document.getElementById('btn-view-list');
         const btnMap = document.getElementById('btn-view-map');
@@ -470,7 +595,6 @@
         if(view === 'list') {
             els.views.listView.classList.remove('hidden');
             els.views.mapView.classList.add('hidden');
-            // 如果有数据，显示面板（内容由 renderAnalysis 填充，这里只控制容器显隐）
             if (globalAnalysis && globalAnalysis.length > 0) {
                 els.views.thoughtPanel.classList.remove('hidden');
             }
@@ -479,7 +603,6 @@
         } else {
             els.views.listView.classList.add('hidden');
             els.views.mapView.classList.remove('hidden');
-            // 地图模式下隐藏思维链面板，给地图更多空间
             els.views.thoughtPanel.classList.add('hidden');
 
             if(btnMap) btnMap.className = 'px-3 py-1 rounded-md bg-white shadow text-primary font-medium transition-all';
@@ -489,6 +612,7 @@
         }
     }
 
+    // --- 状态控制 (不变) ---
     function toggleState(state) {
         els.views.empty.classList.add('hidden');
         els.views.loading.classList.add('hidden');
@@ -496,6 +620,7 @@
         els.views.wrapper.classList.add('hidden');
         els.views.switcher.style.display = 'none';
 
+        if(state === 'empty') els.views.empty.classList.remove('hidden');
         if(state === 'loading') els.views.loading.classList.remove('hidden');
         if(state === 'error') els.views.error.classList.remove('hidden');
         if(state === 'success') {
@@ -504,6 +629,7 @@
         }
     }
 
+    // --- 工具函数 (不变) ---
     function processRefLinks(text) {
         return text ? String(text).replace(/\[参考图\s*(\d+)(?:-[^\]]+)?\]/g, (match, id) => `<span class="text-primary font-bold mx-1 hover:underline select-none" onclick="previewImage('${id}');event.stopPropagation()">${match}</span>`) : '';
     }
