@@ -23,10 +23,10 @@ class TestCase(BaseModel):
     type: str = Field(description="Stream A/Stream B/Stream C")
     pre_condition: str = Field(description="前置条件，指测试开始前系统必须具备的状态或用户所处的环境")
     visual_evidence: str = Field(
-        description="【视觉溯源】必须指明该用例是基于哪张图片的什么逻辑生成的。格式示例：'基于[参考图1-流程图]的否决分支'。如果仅基于文本，填'无'。"
+        description="【视觉溯源】必须指明该用例是基于哪张图片的什么逻辑生成的。如果仅基于文本，填'无'。不要无中生有图片"
     )
     steps: List[str] = Field(
-        description="操作步骤。每步不超过15字。如果涉及UI元素，请在步骤中明确指出。"
+        description="操作步骤。每步不超过15字。如果涉及visual_evidence中的UI元素，请在步骤中明确指出。"
     )
     expected_result: str = Field(description="预期结果")
 
@@ -65,6 +65,7 @@ def get_llm():
         openai_api_base=BASE_URL,
         temperature=0.1,
         max_completion_tokens=32000,
+        reasoning_effort ="minimal",
         model_kwargs={
             "response_format": {"type": "json_object"}
         }

@@ -1,3 +1,5 @@
+# prd_parser.py
+
 import requests
 import json
 import base64
@@ -44,15 +46,18 @@ class FeishuDocParser:
             if resp.status_code == 200:
                 image = Image.open(io.BytesIO(resp.content))
                 width, height = image.size
-                total_pixels = width * height
-                MAX_PIXELS = 30 * 1000 * 1000
+                MAX_SIDE = 1536
 
-                if total_pixels > MAX_PIXELS:
-                    scale_factor = (MAX_PIXELS / total_pixels) ** 0.5
+                if max(width, height) > MAX_SIDE:
+                    # 计算缩放比例
+                    scale_factor = MAX_SIDE / max(width, height)
                     new_width = int(width * scale_factor)
                     new_height = int(height * scale_factor)
-                    print(f"⚠️ 发现超大图片 ({width}x{height})，正在压缩至 ({new_width}x{new_height})...")
+
+                    print(f"⚠️ 图片过大 ({width}x{height})，压缩长边至 {MAX_SIDE} -> ({new_width}x{new_height})...")
                     image = image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+                # --- 修改结束 ---
+
                 if image.mode in ("RGBA", "P"):
                     image = image.convert("RGB")
 
@@ -192,6 +197,15 @@ class FeishuDocParser:
                     })
 
         return parsed_results
+
+    @staticmethod
+    def parse_text(raw_text: str) -> list:
+        if not raw_text.strip():
+            return []
+        return [{
+            "type": "text",
+            "content": raw_text.strip()
+        }]
 
 
 if __name__ == "__main__":

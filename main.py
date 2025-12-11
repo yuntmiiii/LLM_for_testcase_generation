@@ -1,12 +1,14 @@
+from typing import Optional
 import uvicorn
 import traceback
 import json
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, HTMLResponse
-from fastapi.staticfiles import StaticFiles  # <-- 新增导入
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from prd_parser import FeishuDocParser
+from file_parser import parse_uploaded_file  # 【新增导入】
 from model import get_llm, build_content_parts, step_1_analyze_and_plan, step_2_generate_cases
 from db import save_result, get_result_by_key, init_db
 
@@ -25,30 +27,58 @@ app.add_middleware(
 )
 
 
-# --- API 请求和响应模型 (不变) ---
-class FeishuRequest(BaseModel):
-    doc_url: str = Field(..., description="飞书文档链接")
-    app_id: str = Field(..., description="飞书 App ID")
-    app_secret: str = Field(..., description="飞书 App Secret")
-
-
 class CaseSaveRequest(BaseModel):
     final_json: dict = Field(..., description="最终生成的测试用例和分析的 JSON 结构")
 
 
-async def generate_stream_process(req: FeishuRequest):
-
+async def generate_stream_process(
+        input_mode: str,
+        doc_url: str,
+        raw_content: str,
+        app_id: str,
+        app_secret: str,
+        uploaded_file: UploadFile
+):
     try:
-        # --- 阶段 1: 解析文档 ---
-        yield json.dumps({"type": "log", "message": "正在解析飞书文档..."}) + "\n"
+        parsed_data = []
 
-        parser = FeishuDocParser(req.app_id, req.app_secret)
-        parsed_data = parser.parse(req.doc_url)
+        if input_mode == 'link':
+            yield json.dumps({"type": "log", "message": "正在解析飞书文档..."}) + "\n"
+            if not doc_url:
+                raise ValueError("请提供飞书文档链接")
+            if not app_id or not app_secret:
+                raise ValueError("请提供飞书 App ID 和 App Secret")
 
-        # ... (处理解析结果和发送图片) ...
+            parser = FeishuDocParser(app_id, app_secret)
+            parsed_data = parser.parse(doc_url)
+
+        elif input_mode == 'text':
+            yield json.dumps({"type": "log", "message": "正在解析粘贴的文本内容..."}) + "\n"
+            if not raw_content:
+                raise ValueError("请粘贴 PRD 文本内容")
+
+            parsed_data = FeishuDocParser.parse_text(raw_content)
+
+        elif input_mode == 'file':
+            yield json.dumps({"type": "log", "message": f"正在解析上传的文件: {uploaded_file.filename}..."}) + "\n"
+            if not uploaded_file:
+                raise ValueError("未接收到上传的文件")
+
+            text_content = await parse_uploaded_file(uploaded_file)
+
+            if not text_content:
+                raise ValueError("文件内容为空或无法提取")
+
+            # 将提取的文本转换为 LLM 统一格式
+            parsed_data = FeishuDocParser.parse_text(text_content)
+
+        else:
+            raise ValueError(f"不支持的输入模式: {input_mode}")
+
         if not parsed_data:
-            yield json.dumps({"type": "error", "message": "文档解析为空"}) + "\n"
+            yield json.dumps({"type": "error", "message": "解析内容为空，请检查输入"}) + "\n"
             return
+
 
         image_map = {}
         img_count = 0
@@ -57,7 +87,7 @@ async def generate_stream_process(req: FeishuRequest):
                 img_count += 1
                 image_map[str(img_count)] = node['base64']
 
-        # 发送图片数据
+
         yield json.dumps({"type": "images", "data": image_map}) + "\n"
 
         # --- 阶段 2: AI 分析 (生成导图) ---
@@ -102,11 +132,22 @@ async def generate_stream_process(req: FeishuRequest):
         yield json.dumps({"type": "error", "message": str(e)}) + "\n"
 
 
-# 接口入口
 @app.post("/generate_from_feishu")
-async def generate_from_feishu(req: FeishuRequest):
-    print(f"收到请求: {req.doc_url}")
-    return StreamingResponse(generate_stream_process(req), media_type="application/x-ndjson")
+async def generate_from_feishu(
+    input_mode: str = Form("link"),
+    doc_url: str = Form(None),
+    raw_content: str = Form(None),
+    app_id: str = Form(None),
+    app_secret: str = Form(None),
+    uploaded_file: Optional[UploadFile] = File(None)
+):
+    print(f"收到请求，模式: {input_mode}")
+    return StreamingResponse(
+        generate_stream_process(
+            input_mode, doc_url, raw_content, app_id, app_secret, uploaded_file
+        ),
+        media_type="application/x-ndjson"
+    )
 
 
 @app.post("/save_result")
@@ -129,11 +170,8 @@ async def load_case_result(key: str):
         return {"message": "未找到对应的测试用例结果"}, 404
 
 
-# --- 【重要新增】前端托管配置 ---
-#
-# # 1. 挂载静态文件目录 (用于加载 test_case_web.html 中的静态资源，如 CSS/JS 库)
-# # 假设所有文件都在当前目录
 app.mount("/static", StaticFiles(directory="."), name="static")
+
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_frontend():

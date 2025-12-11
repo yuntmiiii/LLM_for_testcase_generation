@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>基于LLM的测试用例生成工具</title>
+  <title>基于VLM的PRD->测试用例工具</title>
+
+  <link rel="icon" href="./Lark_Suite_logo_2022.png" type="image/png">
 
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
@@ -56,26 +58,33 @@
   <header class="bg-white shadow-sm flex-none z-50">
     <div class="container mx-auto px-4 py-3 flex justify-between items-center">
       <div class="flex items-center space-x-2">
-        <i class="fa fa-file-code-o text-primary text-2xl"></i>
-        <h1 class="text-xl md:text-2xl font-bold text-dark">测试用例生成助手 Pro</h1>
+        <svg width="20" height="20" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M139.5 75.5C160.3 72.3 187.2 77.6 187.2 77.6C187.2 77.6 176.5 105.2 161.5 121C146.5 136.8 119.5 133.5 119.5 133.5L139.5 75.5Z" fill="#164296"/>
+            <path d="M87.5 119C87.5 119 107 102 119.5 75.5L144 36.5C144 36.5 113 33 92 43.5C71 54 50 72 48.5 81C47 90 87.5 119 87.5 119Z" fill="#00C4A6"/>
+            <path d="M20 75.5V145C20 145 43 173 93.5 167C144 161 160 130.5 160 130.5C160 130.5 112.5 139 87.5 119C62.5 99 20 75.5 20 75.5Z" fill="#3370FF"/>
+        </svg>
+        <h1 class="text-xl md:text-2xl font-bold text-dark">基于VLM的PRD->测试用例工具</h1>
       </div>
     </div>
   </header>
 
   <main class="flex-grow container mx-auto px-4 py-4 md:py-6 flex flex-col h-[calc(100vh-64px)] overflow-hidden">
 
-    <div class="bg-white rounded-xl shadow-sm p-4 mb-4 fade-in border-l-4 border-primary flex-none flex justify-between items-center">
-        <div class="flex items-start">
+    <div class="bg-white rounded-xl shadow-sm p-4 mb-4 fade-in border-l-4 border-primary flex-none">
+        <div class="flex items-center mb-4">
             <div class="bg-blue-50 p-3 rounded-lg mr-4">
               <i class="fa fa-cloud-download text-primary text-xl"></i>
             </div>
             <div>
-              <h2 class="text-lg font-semibold text-dark mb-1">从飞书文档生成</h2>
-              <p class="text-gray-600 text-sm">支持自动解析业务流程、UI截图与规则，生成思维导图和详细用例。</p>
+              <h2 class="text-lg font-semibold text-dark">测试内容来源</h2>
+              <p class="text-gray-600 text-sm">选择从飞书文档、粘贴文本或上传文件。</p>
             </div>
         </div>
+        <div class="flex bg-gray-200 p-1 rounded-lg text-sm w-full md:w-1/2">
+            <button onclick="changeInputMode('link')" id="mode-link-btn" class="flex-1 px-3 py-2 rounded-md transition-all"><i class="fa fa-link mr-1"></i>飞书链接解析</button>
+            <button onclick="changeInputMode('text')" id="mode-text-btn" class="flex-1 px-3 py-2 rounded-md transition-all"><i class="fa fa-file-text-o mr-1"></i>文本/文件上传</button>
+        </div>
     </div>
-
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-grow overflow-hidden min-h-0 pb-2">
 
       <div class="lg:col-span-3 bg-white rounded-xl shadow-sm overflow-hidden flex flex-col h-full border border-gray-100">
@@ -84,14 +93,35 @@
           <h3 class="font-semibold text-dark">参数配置</h3>
         </div>
         <div class="p-4 flex-grow overflow-y-auto custom-scrollbar flex flex-col gap-4">
-          <div>
-            <label class="block text-sm font-bold text-gray-700 mb-2">飞书文档链接</label>
-            <input type="url" id="doc-url" class="w-full pl-3 pr-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-primary/50 text-xs" placeholder="https://..." value="">
+
+          <div id="link-input-group" class="space-y-4">
+            <div>
+              <label class="block text-sm font-bold text-gray-700 mb-2">飞书文档链接</label>
+              <input type="url" id="doc-url" class="w-full pl-3 pr-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-primary/50 text-xs" placeholder="https://..." value="">
+            </div>
+            <div id="feishu-key-group" class="bg-blue-50 rounded p-3 border border-blue-100 space-y-2">
+               <label class="block text-xs font-bold text-blue-800">开放平台 Key</label>
+               <input type="text" id="app-id" class="w-full px-2 py-1.5 border border-gray-300 rounded text-xs" placeholder="App ID (cli_...)" value="">
+               <input type="password" id="app-secret" class="w-full px-2 py-1.5 border border-gray-300 rounded text-xs" placeholder="App Secret" value="">
+            </div>
           </div>
-          <div class="bg-blue-50 rounded p-3 border border-blue-100 space-y-2">
-             <label class="block text-xs font-bold text-blue-800">开放平台 Key</label>
-             <input type="text" id="app-id" class="w-full px-2 py-1.5 border border-gray-300 rounded text-xs" placeholder="App ID (cli_...)" value="">
-             <input type="password" id="app-secret" class="w-full px-2 py-1.5 border border-gray-300 rounded text-xs" placeholder="App Secret" value="">
+          <div id="text-input-group" class="space-y-4 hidden">
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">粘贴 PRD 核心内容</label>
+                <textarea id="raw-content" class="w-full pl-3 pr-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-primary/50 text-xs min-h-[150px]" placeholder="请粘贴 PRD 的核心功能描述、流程和关键规则..."></textarea>
+                <p class="text-xs text-gray-500 mt-1">文本模式无法解析图片。</p>
+            </div>
+
+            <div>
+                <label class="block text-sm font-bold text-gray-700 mb-2">或上传文件 (Word/PDF/TXT)</label>
+                <input type="file" id="uploaded-file" accept=".pdf,.docx,.txt" class="w-full text-xs text-gray-500
+                    file:mr-4 file:py-2 file:px-4
+                    file:rounded-full file:border-0
+                    file:text-sm file:font-semibold
+                    file:bg-violet-50 file:text-primary
+                    hover:file:bg-violet-100
+                "/>
+            </div>
           </div>
           <button id="generate-btn" class="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-2 rounded shadow transition-all flex justify-center items-center text-sm active:scale-95">
             <i class="fa fa-magic mr-2"></i> 开始生成
@@ -165,7 +195,6 @@
   </div>
 
 <script>
-    // **确保 API URL 显式指向 FastAPI 服务器的端口 8000**
     const API_BASE_URL = 'http://localhost:8000';
     const GENERATE_URL = `${API_BASE_URL}/generate_from_feishu`;
 
@@ -173,6 +202,7 @@
     let globalCases = [];
     let globalAnalysis = [];
     let markmapInstance = null;
+    let currentInputMode = 'link'; // 【新增】追踪当前输入模式
 
     // DOM 元素引用
     const els = {
@@ -181,7 +211,16 @@
         appSecret: document.getElementById('app-secret'),
         generateBtn: document.getElementById('generate-btn'),
         copyBtn: document.getElementById('copy-btn'),
-        exportBtn: document.getElementById('export-btn'), // 保存链接按钮
+        exportBtn: document.getElementById('export-btn'),
+        // 【新增】
+        rawContent: document.getElementById('raw-content'),
+        uploadedFile: document.getElementById('uploaded-file'),
+        modeLinkBtn: document.getElementById('mode-link-btn'),
+        modeTextBtn: document.getElementById('mode-text-btn'),
+        linkInputGroup: document.getElementById('link-input-group'),
+        textInputGroup: document.getElementById('text-input-group'),
+        feishuKeyGroup: document.getElementById('feishu-key-group'),
+
         views: {
             empty: document.getElementById('result-empty'),
             loading: document.getElementById('result-loading'),
@@ -194,6 +233,32 @@
             thoughtContent: document.getElementById('thought-content')
         }
     };
+
+    // 【新增】输入模式切换函数
+    window.changeInputMode = function(mode) {
+        if (currentInputMode === mode) return;
+        currentInputMode = mode;
+
+        els.modeLinkBtn.className = 'flex-1 px-3 py-2 rounded-md transition-all';
+        els.modeTextBtn.className = 'flex-1 px-3 py-2 rounded-md transition-all';
+
+        if (mode === 'link') {
+            els.modeLinkBtn.classList.add('bg-white', 'shadow', 'text-primary', 'font-medium');
+            els.modeTextBtn.classList.remove('bg-white', 'shadow', 'text-primary', 'font-medium');
+            els.modeTextBtn.classList.add('text-gray-500', 'hover:text-gray-700', 'font-medium');
+
+            els.linkInputGroup.classList.remove('hidden');
+            els.textInputGroup.classList.add('hidden');
+        } else {
+            els.modeTextBtn.classList.add('bg-white', 'shadow', 'text-primary', 'font-medium');
+            els.modeLinkBtn.classList.remove('bg-white', 'shadow', 'text-primary', 'font-medium');
+            els.modeLinkBtn.classList.add('text-gray-500', 'hover:text-gray-700', 'font-medium');
+
+            els.linkInputGroup.classList.add('hidden');
+            els.textInputGroup.classList.remove('hidden');
+        }
+    }
+
 
     // --- 辅助函数：获取当前所有结果的 JSON 结构 ---
     function getFinalResultJson() {
@@ -223,7 +288,10 @@
             });
         }
 
-        // **[新增]** 检查 URL 中的 key 参数并尝试加载
+        // 应用默认模式
+        changeInputMode('link');
+
+        // 检查 URL 中的 key 参数并尝试加载
         const urlParams = new URLSearchParams(window.location.search);
         const loadKey = urlParams.get('key');
 
@@ -235,19 +303,68 @@
         }
     });
 
-    // --- 生成逻辑 ---
+    // --- 生成逻辑 - 【核心修改：使用 FormData】---
     els.generateBtn.addEventListener('click', async () => {
-        const params = {
-            doc_url: els.docUrl.value.trim(),
-            app_id: els.appId.value.trim(),
-            app_secret: els.appSecret.value.trim()
-        };
 
-        if(!params.doc_url) return showToast('请输入飞书文档链接', 'warning');
-        if(!params.app_id || !params.app_secret) return showToast('请完善 API 配置', 'warning');
+        const formData = new FormData();
+        let modeToSend = currentInputMode;
 
-        localStorage.setItem('feishu_app_id', params.app_id);
-        localStorage.setItem('feishu_app_secret', params.app_secret);
+        // ... (全局变量和重置保持不变) ...
+
+        if (currentInputMode === 'link') {
+            // --- 飞书链接模式 ---
+            const doc_url = els.docUrl.value.trim();
+            const app_id = els.appId.value.trim();
+            const app_secret = els.appSecret.value.trim();
+
+            if(!doc_url) return showToast('请输入飞书文档链接', 'warning');
+            if(!app_id || !app_secret) return showToast('请完善 API 配置', 'warning');
+
+            localStorage.setItem('feishu_app_id', app_id);
+            localStorage.setItem('feishu_app_secret', app_secret);
+
+            formData.append('doc_url', doc_url);
+            formData.append('app_id', app_id);
+            formData.append('app_secret', app_secret);
+            formData.append('input_mode', 'link');
+
+            formData.append('raw_content', ''); // 确保 raw_content 字段存在
+
+            // 【关键】: 在非文件模式下，显式添加一个空的 File/Blob 对象
+            // 这样后端UploadedFile字段就能正确接收到数据，而不会是空字符串
+            formData.append('uploaded_file', new Blob([""], { type: "application/octet-stream" }), "empty_file.bin");
+
+
+        } else if (currentInputMode === 'text') {
+            // --- 文本/文件模式 ---
+            const file = els.uploadedFile.files[0];
+            const raw_content = els.rawContent.value.trim();
+
+            if (!file && !raw_content) {
+                return showToast('请粘贴 PRD 文本或选择一个文件', 'warning');
+            }
+
+            // 飞书键值不相关，但需发送空值
+            formData.append('doc_url', '');
+            formData.append('app_id', '');
+            formData.append('app_secret', '');
+
+            if (file) {
+                // 文件上传
+                modeToSend = 'file';
+                formData.append('uploaded_file', file, file.name);
+                formData.append('raw_content', raw_content || ''); // 文本作为补充
+            } else {
+                // 纯文本粘贴
+                modeToSend = 'text';
+                formData.append('raw_content', raw_content);
+                // 【关键】: 在非文件模式下，显式添加一个空的 File/Blob 对象
+                formData.append('uploaded_file', new Blob([""], { type: "application/octet-stream" }), "empty_file.bin");
+            }
+
+            formData.append('input_mode', modeToSend);
+        }
+
 
         toggleState('loading');
         els.views.loading.querySelector('p').innerText = "正在连接服务器...";
@@ -260,19 +377,17 @@
         els.views.thoughtContent.innerHTML = '';
 
         try {
-            // 使用 GENERATE_URL
+            // 使用 GENERATE_URL，注意：使用 FormData 时不需要设置 Content-Type
             const response = await fetch(GENERATE_URL, {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(params)
+                body: formData
             });
 
-            // 检查流式响应是否成功
+            // ... (后续流式处理逻辑保持不变) ...
             if (!response.ok || !response.body) {
                 const errorText = await response.text();
                 throw new Error(`生成请求失败: ${response.status} ${response.statusText}. 响应: ${errorText.substring(0, 100)}...`);
             }
-
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
@@ -336,7 +451,7 @@
         }
     }
 
-    // --- **[新增]** 根据 Key 加载结果的函数 ---
+    // --- 根据 Key 加载结果的函数 ---
     async function loadResultFromKey(key) {
         toggleState('loading');
         els.views.loading.querySelector('p').innerText = `正在加载 Key: ${key} 的测试用例...`;
@@ -374,7 +489,7 @@
         }
     }
 
-    // --- **[修改]** 保存为链接逻辑 ---
+    // --- 保存为链接逻辑 ---
     els.exportBtn.addEventListener('click', async () => {
         if (globalCases.length === 0) {
             return showToast('请先生成用例再保存', 'warning');
@@ -409,7 +524,7 @@
         }
     });
 
-    // --- **[修改]** 复制 JSON 逻辑，改为复制完整的 JSON 结构 ---
+    // --- 复制 JSON 逻辑 ---
     els.copyBtn.addEventListener('click', () => {
         if (globalCases.length === 0 && globalAnalysis.length === 0) {
             return showToast('没有数据可复制', 'warning');
